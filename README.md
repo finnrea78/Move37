@@ -1,7 +1,7 @@
 # Penrose-Lamarck
 
 ## Introduction
-Penrose Lamarck is a flashcard-based learning platform designed for the age of AI. In a world where information is ubiquitous and AI can generate text, code, and biological sequences in milliseconds, the human acts of retaining knowledge and reasoning are often dismissed as superfluous.
+Penrose Lamarck islearning platform designed for the age of AI. In a world where information is ubiquitous and AI can generate text, code, and biological sequences in milliseconds, the human acts of retaining knowledge and reasoning are often dismissed as superfluous.
 
 This project rejects that premise. We believe that human cognitive sovereignty is the final frontier of our evolution. To study is not merely to store data; it is to architect a mind capable of non-computable intuition and intentional self-transformation.
 
