@@ -60,6 +60,16 @@ html_theme_options = {
     "sidebar_hide_name": True,
 }
 
+DEFAULT_REPO = "Genentech/penrose-lamarck"
+_repo = DEFAULT_REPO
+_branch = "main"
+_source_dir = "docs/sphinx/src/"
+html_theme_options.update({
+    "source_repository": f"https://github.com/{_repo}/",
+    "source_branch": _branch,
+    "source_directory": _source_dir,
+})
+
 # Ensure relative imports work when building
 sys.path.insert(0, os.path.abspath("."))
 

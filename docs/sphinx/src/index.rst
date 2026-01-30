@@ -69,7 +69,7 @@ We are not recruiting full-stack engineers. We are recruiting cognitive pioneers
 
 .. toctree::
    :maxdepth: 2
-   :caption: Manifest
+   :caption: Index
    :titlesonly:
    :hidden:
 

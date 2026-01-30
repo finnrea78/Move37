@@ -288,6 +288,23 @@ input[type="search"] { border: 1px solid var(--border); }
   color: #ffffff !important;
 }
 
+/* Dark mode: ensure "View" and "Edit this page" icons are visible */
+[data-theme="dark"] .content-icon-container .view-this-page .muted-link,
+[data-theme="dark"] .content-icon-container .edit-this-page .muted-link {
+  color: #ffffff !important; /* sets currentColor for stroke */
+  opacity: 1; /* counteract muted link style */
+}
+[data-theme="dark"] .content-icon-container .view-this-page svg,
+[data-theme="dark"] .content-icon-container .edit-this-page svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+}
+[data-theme="dark"] .content-icon-container .view-this-page .muted-link:hover svg,
+[data-theme="dark"] .content-icon-container .edit-this-page .muted-link:hover svg {
+  color: var(--color-brand-content) !important;
+  stroke: var(--color-brand-content) !important;
+}
+
 /* Auto mode should mirror dark when system prefers dark */
 @media (prefers-color-scheme: dark) {
   :root[data-theme="auto"] {
@@ -312,6 +329,22 @@ input[type="search"] { border: 1px solid var(--border); }
   [data-theme="auto"] .content h5,
   [data-theme="auto"] .content h6 {
     color: #ffffff !important;
+  }
+  /* Auto-dark: ensure "View" and "Edit this page" icons are visible */
+  [data-theme="auto"] .content-icon-container .view-this-page .muted-link,
+  [data-theme="auto"] .content-icon-container .edit-this-page .muted-link {
+    color: #ffffff !important;
+    opacity: 1;
+  }
+  [data-theme="auto"] .content-icon-container .view-this-page svg,
+  [data-theme="auto"] .content-icon-container .edit-this-page svg {
+    color: #ffffff !important;
+    stroke: #ffffff !important;
+  }
+  [data-theme="auto"] .content-icon-container .view-this-page .muted-link:hover svg,
+  [data-theme="auto"] .content-icon-container .edit-this-page .muted-link:hover svg {
+    color: var(--color-brand-content) !important;
+    stroke: var(--color-brand-content) !important;
   }
 }
 
