@@ -113,9 +113,9 @@ def _emit_engineering_manifest(outdir: str) -> None:
         return
 
     data: dict[str, str] = {}
-    pattern = re.compile(r"^CEM-\d{3}-\d{3}-.*$")
-    # Only consider files strictly matching CEM-###-###-*.rst
-    for rst_file in sorted(src_dir.glob("CEM-*-*-*.rst")):
+    pattern = re.compile(r"^CEM-\d{3}-\d{3}(?:-.+)?$")
+    # Consider files matching CEM-###-### optionally followed by a -suffix
+    for rst_file in sorted(src_dir.glob("CEM-*-*.rst")):
         if not pattern.match(rst_file.stem):
             continue
         try:

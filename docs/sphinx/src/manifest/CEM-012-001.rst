@@ -5,7 +5,7 @@
 .. code-block:: python
 
    """
-   Short summary describing the module’s purpose.
+   Short summary describing the module's purpose.
 
    Optional longer description with context, constraints, and side effects.
 

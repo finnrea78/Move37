@@ -4,16 +4,20 @@ CEM-011 Modus Operantis
 Modus operantis defines how human and AI agents operate whilst tackling a problem. Some
 specifications are particular to human agents.
 
-Divide and Conquer (CEM-011-000)  
---------------------------------
+🤖  Divide and Conquer  
+----------------------
 
-specification 🤖
-~~~~~~~~~~~~~~~~
+``CEM-011-000``
+
+Specification
+~~~~~~~~~~~~~
 
 .. include:: ./CEM-011-000.rst
 
-Sleep CEM-011-001  
------------------
+Sleep
+-----
+
+**Code:** ``CEM-011-001``
 
 Specification
 ~~~~~~~~~~~~~
@@ -28,3 +32,13 @@ Specification
 - Avoid alcohol before sleep
 - Create a restful environment
     - Dark, quiet, and cool room
+
+🤖 Plan and Execute
+-------------------
+
+**Code:** ``CEM-011-002``
+
+Specification
+~~~~~~~~~~~~~
+
+.. include:: ./CEM-011-002.rst
