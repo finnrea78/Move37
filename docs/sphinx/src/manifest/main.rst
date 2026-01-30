@@ -15,4 +15,5 @@ Manifest
     CEM-008.rst
     CEM-009.rst
     CEM-010.rst
-    CEM-011.rst
+    CEM-011-modus.rst
+    CEM-012-docs.rst

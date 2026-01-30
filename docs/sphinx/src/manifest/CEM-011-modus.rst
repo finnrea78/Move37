@@ -1,5 +1,5 @@
-Modus Operantis (CEM-011)
-=========================
+CEM-011 Modus Operantis
+=======================
 
 Modus operantis defines how human and AI agents operate whilst tackling a problem. Some
 specifications are particular to human agents.
