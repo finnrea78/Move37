@@ -4,7 +4,7 @@ from datetime import datetime
 
 # -- Project information -----------------------------------------------------
 project = "Penrose-Lamarck"
-author = "gRED Computational Sciences"
+author = "Roche gRED Computational Sciences"
 # Specify version directly in this file. Edit `version_raw` when releasing.
 version_raw = "1.0.0"
 project_version = f"v{version_raw.lstrip('v')}"
