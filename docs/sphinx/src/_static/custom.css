@@ -64,6 +64,8 @@ We use Inter (open-source) for body and JetBrains Mono for code.
   --border: #e5e7eb;
   /* Static overlay tint: brand blue */
   --overlay-color: rgba(46, 170, 220, 0.50);
+  /* Shared height for brand + search bars */
+  --sidebar-bar-height: 44px;
   /* Enforce Inter as the app-wide font stack */
   --font-stack: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji';
   --font-stack--headings: var(--font-stack);
@@ -111,8 +113,17 @@ div.sidebar-search input[type="search"] {
   color: #e5e7eb;
   border: 1px solid #1f2937;
   border-radius: 8px;
+  height: var(--sidebar-bar-height);
+  box-sizing: border-box;
+  padding: 0 12px;
 }
 div.sidebar-search input[type="search"]::placeholder { color: #94a3b8; }
+div.sidebar-search {
+  display: flex;
+  align-items: center;
+  height: var(--sidebar-bar-height);
+  padding: 0 12px;
+}
 
 /* Code blocks */
 pre, code { font-family: 'JetBrains Mono', SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; }
@@ -347,4 +358,32 @@ input[type="search"] { border: 1px solid var(--border); }
     stroke: var(--color-brand-content) !important;
   }
 }
+
+/* Sidebar GitHub icon/link near brand */
+
+/* Brand row: logo left, GitHub right */
+.sidebar-brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--sidebar-bar-height);
+  padding: 0px 10px 0px 0px;
+}
+.sidebar-brand-row .brand-logo {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.sidebar-brand-row .brand-logo .logo { max-height: calc(var(--sidebar-bar-height) - 10px); width: auto; display: block; }
+
+
+/* Reusable GitHub icon styles */
+.github-icon {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  color: var(--color-foreground-secondary);
+}
+.github-icon:hover { color: var(--color-brand-content); }
+.github-icon svg { width: 20px; height: 20px; }
 

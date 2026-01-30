@@ -36,6 +36,13 @@ html_css_files = ["custom.css"]
 release = project_version
 version = project_version
 html_favicon = "_static/tab_header_logo.svg"
+html_sidebars = {
+    "**": [
+        "sidebar/brand.html",
+        "sidebar/search.html",
+        "sidebar/navigation.html",
+    ]
+}
 
 # Furo theme tweaks
 html_theme_options = {
