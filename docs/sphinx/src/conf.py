@@ -1,6 +1,9 @@
 import os
 import sys
 from datetime import datetime
+from pathlib import Path
+import json
+import re
 
 # -- Project information -----------------------------------------------------
 project = "Penrose-Lamarck"
@@ -27,6 +30,9 @@ source_suffix = {
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+ 
+# Allow reStructuredText "include" directive
+file_insertion_enabled = True
 
 # -- Options for HTML output -------------------------------------------------
 html_theme = "furo"
@@ -86,3 +92,49 @@ rst_epilog = f"\n.. |version| replace:: {project_version}\n"
 # Code highlighting styles
 pygments_style = "friendly"
 pygments_dark_style = "dracula"
+
+# -- Engineering Manifest build hook ----------------------------------------
+_MANIFEST_SRC = Path(__file__).parent / "manifest"
+
+def _emit_engineering_manifest(outdir: str) -> None:
+    """
+    Generate manifest.json from all CEM-*-*.rst files under the manifest folder.
+
+    Writes a single JSON file mapping the file stem (e.g., "CEM-002-000")
+    to the full raw content of the corresponding .rst file as one string.
+
+    Output location: <sphinx outdir>/manifest.json
+
+    @param outdir: Sphinx builder output directory (e.g., docs/sphinx/build/html)
+    @throws OSError: If the file cannot be written to the output directory
+    """
+    src_dir = _MANIFEST_SRC
+    if not src_dir.exists():
+        return
+
+    data: dict[str, str] = {}
+    pattern = re.compile(r"^CEM-\d{3}-\d{3}$")
+    # Only consider files strictly matching CEM-###-###.rst
+    for rst_file in sorted(src_dir.glob("CEM-*-*.rst")):
+        if not pattern.match(rst_file.stem):
+            continue
+        try:
+            content = rst_file.read_text(encoding="utf-8")
+        except Exception:
+            # Skip unreadable files but do not fail the Sphinx build
+            continue
+        data[rst_file.stem] = content
+
+    out_path = Path(outdir) / "manifest.json"
+    # Use pretty printing to aid human inspection; ensure_ascii=False preserves UTF-8
+    payload = json.dumps(data, ensure_ascii=False, indent=2)
+    out_path.write_text(payload, encoding="utf-8")
+
+def _on_build_finished(app, exception):
+    # Only emit on successful builds to avoid stale/partial files
+    if exception is None:
+        _emit_engineering_manifest(app.outdir)
+
+def setup(app):
+    # Hook into Sphinx lifecycle to generate manifest.json alongside HTML output
+    app.connect("build-finished", _on_build_finished)

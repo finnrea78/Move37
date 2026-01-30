@@ -1,0 +1,15 @@
+Hiring (CEM-010)
+================
+
+Technical Assessment in the Age of AI (CEM-010-000)  
+---------------------------------------------------
+
+Specification  🤖
+~~~~~~~~~~~~~~~~~
+
+.. include:: ./CEM-010-000.rst
+
+Blueprint
+~~~~~~~~~
+
+- `genentech/penrose-lamarck <https://github.com/Genentech/penrose-lamarck>`_

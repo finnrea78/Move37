@@ -1,0 +1,2 @@
+The current draft schema for the ODD state machine definition is documented in
+the following file: File.

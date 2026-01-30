@@ -430,3 +430,31 @@ input[type="search"] { border: 1px solid var(--border); }
 .github-icon:hover { color: var(--color-brand-content); }
 .github-icon svg { width: 20px; height: 20px; }
 
+
+/* Heading hierarchy: sizes and colors
+   - Ensure sub-sub-sections (h3) are smaller than sub-sections (h2)
+   - Color progression: h2 darker than h1, h3 darker than h2
+   - Scoped to main article content to avoid sidebar/toc effects
+*/
+
+/* Base sizing refinements */
+#furo-main-content h2 { font-size: 1.5rem; }
+#furo-main-content h3 { font-size: 1.25rem; letter-spacing: -0.005em; }
+
+/* Light theme: darker with depth */
+.content h1 { color: var(--color-foreground-secondary) !important; }
+.content h2 { color: var(--color-foreground-primary) !important; }
+.content h3 { color: color-mix(in srgb, var(--color-foreground-primary), black 12%) !important; }
+
+/* Dark theme: interpret "darker" as lower brightness (closer to background) */
+[data-theme="dark"] .content h1 { color: var(--color-foreground-primary) !important; }
+[data-theme="dark"] .content h2 { color: var(--color-foreground-secondary) !important; }
+[data-theme="dark"] .content h3 { color: color-mix(in srgb, var(--color-foreground-secondary), black 20%) !important; }
+
+/* Auto-dark should mirror dark behavior when system prefers dark */
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] .content h1 { color: var(--color-foreground-primary) !important; }
+  [data-theme="auto"] .content h2 { color: var(--color-foreground-secondary) !important; }
+  [data-theme="auto"] .content h3 { color: color-mix(in srgb, var(--color-foreground-secondary), black 20%) !important; }
+}
+
