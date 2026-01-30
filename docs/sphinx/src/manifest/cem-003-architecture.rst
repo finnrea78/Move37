@@ -1,0 +1,16 @@
+Architectural Pattern Guidelines (CEM-003)
+==========================================
+
+This section defines standard architectural patterns to ensure consistency,
+maintainability, and scalability across new services and projects.
+
+Event-Driven Architecture (DEM-003-000)  
+-----------------------------------------------------
+
+TODO
+
+Blueprint Repositories (CEM-003-001)  
+--------------------------------------------------
+
+Each architectural pattern recommendation will be supported by a corresponding
+GitHub repository offering a "zero-effort" blueprint. TODO
