@@ -1,3 +1,49 @@
+/* Brand row: text + icons aligned left */
+.sidebar-brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.5rem; /* equal spacing between text and icons */
+  color: var(--color-sidebar-brand-text); /* adapts with theme */
+}
+
+.sidebar-brand-row .brand-text {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", Arial, sans-serif;
+  font-weight: 600;
+  font-size: 1rem;
+  letter-spacing: 0.01em;
+}
+
+.sidebar-brand-row a {
+  color: inherit; /* icons inherit brand color instead of link blue */
+  text-decoration: none;
+}
+
+/* Brand text should never look like a link */
+.sidebar-brand-row .brand-text {
+  color: var(--color-sidebar-brand-text);
+  text-decoration: none;
+  cursor: default; /* avoid pointer cursor */
+}
+.sidebar-brand-row .brand-text:hover,
+.sidebar-brand-row .brand-text:visited,
+.sidebar-brand-row .brand-text:active,
+.sidebar-brand-row .brand-text:focus {
+  color: var(--color-sidebar-brand-text);
+  text-decoration: none;
+}
+
+.sidebar-brand-row .github-icon {
+  display: inline-flex;
+  align-items: center;
+  color: inherit;
+}
+
+.sidebar-brand-row .github-icon svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
 /* Generic responsive authors grid */
 .authors-grid {
   display: grid;
@@ -359,9 +405,6 @@ input[type="search"] { border: 1px solid var(--border); }
   }
 }
 
-/* Sidebar GitHub icon/link near brand */
-
-/* Brand row: logo left, GitHub right */
 .sidebar-brand-row {
   display: flex;
   align-items: center;
