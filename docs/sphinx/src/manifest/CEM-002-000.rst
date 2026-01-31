@@ -1,1 +1,9 @@
-- If you have to consume relational data, use postgres.
+If the project uses relational data:
+- use Postgres
+- create a Dockerfile and docker compose entry for the service
+- create `src/<project-name>/db` directory for database-related code (e.g., migrations, session management, requirements, dockerfile)
+- use `alembic` to run the migrations at `src/<project-name>/alembic`
+- use service-model-repository pattern for database interactions:
+    - create `src/<project-name>/repositories` directory for repository classes that handle database operations
+    - create `src/<project-name>/services` directory for service classes that contain business logic and interact with repositories
+    - create `src/<project-name>/models` directory for the ORM models implemented with `sqlalchemy`
