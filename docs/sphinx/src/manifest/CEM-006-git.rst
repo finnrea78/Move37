@@ -1,5 +1,7 @@
-Git and Version Control (CEM-006)
-=================================
+Version Control
+===============
+
+``CEM-006``
 
 Standardizing the use of Git ensures a clean history, simplifies automated
 tooling, and improves the review process.

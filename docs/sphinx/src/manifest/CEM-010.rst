@@ -14,4 +14,4 @@ engineering skillset using AI coding assistants.
 Blueprint
 ~~~~~~~~~
 
-- `genentech/penrose-lamarck <https://github.com/Genentech/penrose-lamarck>`_
+- `genentech/penrose-lamarck <https://github.com/genentech/penrose-lamarck>`_

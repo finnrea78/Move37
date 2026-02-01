@@ -10,10 +10,10 @@ Manifest
     CEM-002-storage.rst
     CEM-003.rst
     CEM-004.rst
-    CEM-006.rst
+    CEM-006-git.rst
     CEM-007.rst
     CEM-008.rst
-    CEM-009.rst
+    CEM-009-dev.rst
     CEM-010.rst
     CEM-011-modus.rst
     CEM-012-docs.rst
