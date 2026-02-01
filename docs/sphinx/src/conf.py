@@ -73,7 +73,7 @@ html_theme_options = {
     "sidebar_hide_name": True,
 }
 
-DEFAULT_REPO = "Genentech/penrose-lamarck"
+DEFAULT_REPO = "genentech/penrose-lamarck"
 _repo = DEFAULT_REPO
 _branch = "main"
 _source_dir = "docs/sphinx/src/"
