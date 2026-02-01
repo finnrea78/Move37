@@ -1,3 +1,4 @@
 .onCreateCommandMarker
 .postCreateCommandMarker
 .updateContentCommandMarker
+.postStartCommandMarker
