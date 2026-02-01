@@ -63,7 +63,7 @@ ARROW_ICON="❯"
 PS1="${GRAY} ${WHITE}${BOLD}$(whoami)${RESET}${GRAY}@${PURPLE}${BOLD}\$(get_repo_name)${RESET} ${BLUE}${GREEN}\w${RESET}\n ${ORANGE}${BOLD}${ARROW_ICON}${RESET} "
 
 # git utils
-alias gc='git commit -m' # gc "feat: <message>"
+alias gcm='git commit -m' # gc "feat: <message>"
 alias gp='git push'
 alias gpl='git pull'
 alias gst='git status'
