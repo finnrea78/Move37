@@ -1,17 +1,90 @@
-version: "3.9"
+## compose project name #########################################################
+##
+## ⚠️ ATTENTION ⚠️
+##
+## Using devcontainer, the project opens under your user name, which is what compose
+## takes as the project name. This can cause issues with dependencies on other
+## containers.
+##
+name: penroselamarck
+## utils ##########################################################################
+##
+## recreate docker network
+##
+##    docker network remove penroselamarck-network 2>/dev/null; docker network create penroselamarck-network
+##
+## rebuild and start all containers
+##
+##    docker compose down -v && docker compose up -d --build
+## 
+## project resources cleanup
+##
+##   docker compose down -v && docker network remove penroselamarck-network
+##
+## full system docker cleanup
+##
+##   docker system prune -a --volumes
+##
 services:
+  ## utils ##########################################################################
+  ##
+  ## rebuild and start container
+  ##
+  ##    docker compose down docs && docker compose up -d --build docs
+  ##
   docs:
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: pl-docs
+      dockerfile: docs/Dockerfile
+    container_name: penroselamarck-docs
     ports:
       - "8000:8000"
     volumes:
       - ./docs/sphinx/src:/docs/src
       - ./docs/sphinx/build:/docs/build
     command: sphinx-autobuild /docs/src /docs/build/html --host 0.0.0.0 --port 8000
-    # Ensure proper file permissions inside container
     environment:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
+    networks:
+      - penroselamarck
+
+  mcp:
+    build:
+      context: .
+      dockerfile: ./src/penroselamarck/Dockerfile
+    container_name: penroselamarck-mcp
+    ports:
+      - "8080:8080"
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/penrose
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16-alpine
+    container_name: penroselamarck-pg
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=penrose
+    ports:
+      - "5432:5432"
+    volumes:
+      - penroselamarck-db-data:/var/lib/postgresql/data
+
+volumes:
+  penroselamarck-db-data:
+    name: penroselamarck-db-data
+
+## utils ##########################################################################
+##
+## inspect docker network containers
+##
+##    docker network inspect penroselamarck-network --format '{{range .Containers}}{{.Name}} {{end}}'
+networks:
+  penroselamarck:
+    name: penroselamarck-network
+    external: true
