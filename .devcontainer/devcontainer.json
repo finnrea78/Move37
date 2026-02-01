@@ -1,5 +1,5 @@
 {
-	"image": "ghcr.io/Genentech/penrose-lamarck-devcontainer:1.0.0",
+	"image": "ghcr.io/genentech/penrose-lamarck-devcontainer:1.0.0",
 	"runArgs": [
 		"--name",
 		"penroselamarck-devcontainer",

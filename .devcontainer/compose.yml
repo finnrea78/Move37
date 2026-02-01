@@ -21,14 +21,14 @@ services:
     build:
       context: ..
       dockerfile: .devcontainer/docker/Dockerfile.base
-    image: ghcr.io/Genentech/penrose-lamarck-devcontainer-base:1.0.0
+    image: ghcr.io/genentech/penrose-lamarck-devcontainer-base:1.0.0
 
   # Tools image with Docker, Node.js, and CDK
   tools:
     build:
       context: ..
       dockerfile: .devcontainer/docker/Dockerfile.tools
-    image: ghcr.io/Genentech/penrose-lamarck-devcontainer-tools:1.0.0
+    image: ghcr.io/genentech/penrose-lamarck-devcontainer-tools:1.0.0
     depends_on:
       - base
 
@@ -40,7 +40,7 @@ services:
       args:
         USRID: ${USRID}
         USRNAME: ${USRNAME}
-    image: ghcr.io/Genentech/penrose-lamarck-devcontainer:1.0.0
+    image: ghcr.io/genentech/penrose-lamarck-devcontainer:1.0.0
     container_name: penroselamarck-devcontainer
     depends_on:
       - tools

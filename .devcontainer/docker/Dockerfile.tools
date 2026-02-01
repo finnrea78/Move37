@@ -1,5 +1,5 @@
 # Build tools image
-FROM ghcr.io/Genentech/penrose-lamarck-devcontainer-base:1.0.0
+FROM ghcr.io/genentech/penrose-lamarck-devcontainer-base:1.0.0
 
 LABEL version="1.0.0"
 

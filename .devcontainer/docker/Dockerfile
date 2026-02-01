@@ -1,5 +1,5 @@
 # Development environment
-FROM ghcr.io/Genentech/penrose-lamarck-devcontainer-tools:1.0.0
+FROM ghcr.io/genentech/penrose-lamarck-devcontainer-tools:1.0.0
 
 LABEL version="1.0.0"
 
@@ -22,7 +22,10 @@ RUN useradd --uid $USRID --create-home -s /bin/bash $USRNAME \
 
 ## ------------------------------------------------------------------
 ## Python runtime & build tooling
-## Keep this separate from requirements so it rarely rebuilds.
+##
+## ⚠️ ATTENTION ⚠️
+##
+## - The current layer is very stable, keep it separate from requirements so it rarely rebuilds.
 ## ------------------------------------------------------------------
 RUN apt update \
     && apt install -y --no-install-recommends \
@@ -36,22 +39,32 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=off
 
 ## ------------------------------------------------------------------
-## Python dependencies (layer invalidates only when requirements change)
-## We copy ONLY requirement files to maximize cache hits.
+## Python dependencies
+## 
+## ⚠️ ATTENTION ⚠️
+##
+## - ONLY requirement files are copied at build time to maximize cache hits. The layer is only invalidated when requirements change.
+## - The list of requirement files varies with project structure, UPDATE ./python-requirements.txt as needed.
+##
 ## ------------------------------------------------------------------
-COPY src/penroselamarck/core/python-requirements.txt /tmp/requirements/core.txt
-COPY src/penroselamarck/api/python-requirements.txt /tmp/requirements/api.txt
-COPY src/penroselamarck/db/python-requirements.txt /tmp/requirements/pg.txt
-COPY src/penroselamarck/alembic/python-requirements.txt /tmp/requirements/alembic.txt
-COPY src/penroselamarck/repositories/python-requirements.txt /tmp/requirements/repositories.txt
-COPY src/penroselamarck/schemas/python-requirements.txt /tmp/requirements/schemas.txt
-COPY src/penroselamarck/services/python-requirements.txt /tmp/requirements/services.txt
-COPY tests/python-requirements.txt /tmp/requirements/tests.txt
+COPY python-requirements.txt /tmp/requirements/services.txt
+COPY tests/python-requirements.txt /tmp/requirements/tests/python-requirements.txt
+COPY src/penroselamarck/python-requirements.txt /tmp/requirements/src/penroselamarck/python-requirements.txt
+COPY src/penroselamarck/alembic/python-requirements.txt /tmp/requirements/src/penroselamarck/alembic/python-requirements.txt
+COPY src/penroselamarck/api/python-requirements.txt /tmp/requirements/src/penroselamarck/api/python-requirements.txt
+COPY src/penroselamarck/core/python-requirements.txt /tmp/requirements/src/penroselamarck/core/python-requirements.txt
+COPY src/penroselamarck/db/python-requirements.txt /tmp/requirements/src/penroselamarck/db/python-requirements.txt
+COPY src/penroselamarck/mcp/python-requirements.txt /tmp/requirements/src/penroselamarck/mcp/python-requirements.txt
+COPY src/penroselamarck/models/python-requirements.txt /tmp/requirements/src/penroselamarck/models/python-requirements.txt
+COPY src/penroselamarck/repositories/python-requirements.txt /tmp/requirements/src/penroselamarck/repositories/python-requirements.txt
+COPY src/penroselamarck/schemas/python-requirements.txt /tmp/requirements/src/penroselamarck/schemas/python-requirements.txt
+COPY src/penroselamarck/services/python-requirements.txt /tmp/requirements/src/penroselamarck/services/python-requirements.txt
 
 RUN set -eux; \
     for f in /tmp/requirements/*.txt; do \
-    echo "Installing $f"; \
-    pip3 install --no-cache-dir -r "$f"; \
+        [ -e "$f" ] || continue; \
+        echo "Installing $f"; \
+        pip3 install --no-cache-dir -r "$f"; \
     done; \
     rm -rf /root/.cache/pip
 
