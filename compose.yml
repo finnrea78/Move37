@@ -69,7 +69,7 @@ services:
     build:
       context: .
       dockerfile: src/penroselamarck/db/Dockerfile
-    container_name: penroselamarck-pg:1.0.0
+    container_name: penroselamarck-pg
     environment:
       - POSTGRES_USER=penroselamarck
       - POSTGRES_PASSWORD=penroselamarck
