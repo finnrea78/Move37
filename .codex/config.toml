@@ -1,5 +1,6 @@
 web_search = "cached"
 model_reasoning_effort = "high"
+personality = "pragmatic"
 
 [shell_environment_policy]
 include_only = [
