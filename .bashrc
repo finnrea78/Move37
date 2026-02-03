@@ -22,7 +22,7 @@ export COMPOSE_DOCKER_CLI_BUILD=1
 # Function to get repository name from git remote
 get_repo_name() {
     local repo_url
-    repo_url=$(git remote get-url origin 2>/dev/null)
+    repo_url=$(git remote get-url origin 2> /dev/null)
 
     # Handle various remote URL formats
     if [[ $repo_url =~ github\.com[:/]([^/]+)/([^/.]+) ]]; then
@@ -67,7 +67,7 @@ alias gcm='git commit -m' # gc "feat: <message>"
 alias gp='git push'
 alias gpl='git pull'
 alias gst='git status'
-alias gco='git checkout' # gco <branch-name>
+alias gco='git checkout'    # gco <branch-name>
 alias gcb='git checkout -b' # gcb <new-branch-name>
 alias gl='git log --oneline --graph --decorate --all'
 alias ga='git add' # ga <file-name>
@@ -77,13 +77,13 @@ alias gds='git diff --staged'
 alias gb='git branch'
 alias gba='git branch -a'
 alias gbd='git branch -d' # gbd <branch-name>
-alias gm='git merge' # gm <branch-name>
-alias gr='git rebase' # gr <branch-name>
+alias gm='git merge'      # gm <branch-name>
+alias gr='git rebase'     # gr <branch-name>
 alias gri='git rebase -i' # gri HEAD~<n>
 alias gf='git fetch'
 alias grh='git reset --hard' # grh HEAD~<n>
 alias grs='git reset --soft' # grs HEAD~<n>
-alias gcp='git cherry-pick' # gcp <commit-hash>
+alias gcp='git cherry-pick'  # gcp <commit-hash>
 alias gsh='git stash'
 alias gshp='git stash pop'
 alias gshl='git stash list'
@@ -91,10 +91,10 @@ alias gsha='git stash apply'
 alias gca='git commit --amend'
 alias gcan='git commit --amend --no-edit'
 alias gclean='git clean -fd'
-alias gundo='git reset --soft HEAD~1' # Undo last commit (keeps changes)
-alias glast='git log -1 HEAD --stat'  # Show last commit
-alias gcontrib='git shortlog -sn' # Show contributors
-alias gplr='git pull --rebase' # Pull with rebase
+alias gundo='git reset --soft HEAD~1'   # Undo last commit (keeps changes)
+alias glast='git log -1 HEAD --stat'    # Show last commit
+alias gcontrib='git shortlog -sn'       # Show contributors
+alias gplr='git pull --rebase'          # Pull with rebase
 alias gpf='git push --force-with-lease' # Push force with lease (safer than --force)
 # Show branches sorted by last modified
 alias gbrecent='git for-each-ref --sort=-committerdate refs/heads/ --format="%(refname:short) - %(committerdate:relative)"'
