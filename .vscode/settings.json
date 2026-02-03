@@ -64,7 +64,6 @@
     "files.exclude": {
         "**/.ruff_cache": true,
         "docs/sphinx/build": true,
-        ".codex": true,
         "**/node_modules": true,
         "**/node_modules/**": true,
         "**/*.log": true,
@@ -141,7 +140,6 @@
     "search.exclude": {
         "**/.ruff_cache": true,
         "docs/sphinx/build": true,
-        ".codex": true,
         "**/node_modules": true,
         "**/node_modules/**": true,
         "**/*.log": true,
