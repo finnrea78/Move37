@@ -41,10 +41,10 @@
 	"features": {
 		"ghcr.io/devcontainers/features/common-utils:2": { "installZsh": false },
 		"ghcr.io/devcontainers/features/github-cli:1": {},
-		"ghcr.io/devcontainers/features/aws-cli:1": {}
+		"ghcr.io/devcontainers/features/aws-cli:1": {},
+		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
 	},
   "mounts": [
-    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
     "source=${localEnv:HOME}/.ssh,target=/home/${localEnv:USER}/.ssh,type=bind"
   ],
 	"postCreateCommand": "bash .devcontainer/scripts/postCreate.sh",
