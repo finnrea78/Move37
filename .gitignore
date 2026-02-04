@@ -9,3 +9,4 @@
 .docker
 .dotnet
 .gnupg
+.env

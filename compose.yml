@@ -30,7 +30,12 @@ services:
   ##
   ## rebuild and start container
   ##
-  ##    docker compose down docs && docker compose up -d --build docs
+  ##    docker compose --env-file .env down -v docs && docker compose --env-file .env up --build docs
+  ##
+  ## ⚠️ ATTENTION ⚠️
+  ##
+  ##    you may want to run curl http://localhost:8000 from outside devcontainer
+  ##    to expose the port on your remote host.
   ##
   docs:
     build:
@@ -40,8 +45,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./docs/sphinx/src:/docs/src
-      - ./docs/sphinx/build:/docs/build
+      - ${HOST_WORKSPACE}/docs/sphinx/src:/docs/src
+      - ${HOST_WORKSPACE}/docs/sphinx/build:/docs/build
     command: sphinx-autobuild /docs/src /docs/build/html --host 0.0.0.0 --port 8000
     environment:
       - PYTHONDONTWRITEBYTECODE=1
