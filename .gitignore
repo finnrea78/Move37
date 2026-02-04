@@ -10,3 +10,5 @@
 .dotnet
 .gnupg
 .env
+.npm
+.node_modules
