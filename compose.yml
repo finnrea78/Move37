@@ -28,7 +28,7 @@ name: penroselamarck
 services:
   ## utils ##########################################################################
   ##
-  ## rebuild and start container
+  ## rebuild and start container (⚠️ requires .env)
   ##
   ##    docker compose --env-file .env down -v docs && docker compose --env-file .env up --build docs
   ##
@@ -57,7 +57,7 @@ services:
   mcp:
     build:
       context: .
-      dockerfile: ./src/penroselamarck/Dockerfile
+      dockerfile: ./src/penroselamarck/mcp/Dockerfile
     container_name: penroselamarck-mcp
     ports:
       - "8080:8080"
