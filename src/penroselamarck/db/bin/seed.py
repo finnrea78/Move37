@@ -1,32 +1,68 @@
 """
 Deterministic mock data seeding for Postgres.
 
-Short summary describing the module's purpose.
+Seeds exercises, practice sessions, attempts, and performance summaries.
 
 Public API
 ----------
 - :func:`main`: Entry point that seeds data idempotently.
+
+Attributes
+----------
+DEFAULT_SEED : int
+    Default random seed for deterministic data generation.
+
+Examples
+--------
+>>> DEFAULT_SEED
+20260203
+
+See Also
+--------
+:mod:`penroselamarck.db.lineage`
 """
 
+from __future__ import annotations
+
+import hashlib
 import os
-from datetime import datetime
-from typing import List
+import random
+import sys
+from collections.abc import Iterable
+from datetime import datetime, timedelta
+
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from penroselamarck.models.exercise_orm import ExerciseORM
-from penroselamarck.models.practice_session_orm import PracticeSessionORM
-from penroselamarck.models.attempt_orm import AttemptORM
+from penroselamarck.db.lineage import emit_openlineage_run
+from penroselamarck.models.attempt import Attempt
+from penroselamarck.models.exercise import Exercise
+from penroselamarck.models.performance_summary import PerformanceSummary
+from penroselamarck.models.practice_session import PracticeSession
+
+DEFAULT_SEED = 20260203
 
 
 def _db_url() -> str:
     """
     _db_url() -> str
 
+    Concise (one-line) description of the function.
+
+    Parameters
+    ----------
+    None
+        This function does not accept parameters.
+
     Returns
     -------
     str
-        SQLAlchemy connection URL from env vars.
+        SQLAlchemy connection URL from environment variables.
+
+    Examples
+    --------
+    >>> isinstance(_db_url(), str)
+    True
     """
     user = os.getenv("POSTGRES_USER", "penroselamarck")
     password = os.getenv("POSTGRES_PASSWORD", "penroselamarck")
@@ -36,114 +72,360 @@ def _db_url() -> str:
     return f"postgresql+psycopg://{user}:{password}@{host}:{port}/{db}"
 
 
-def _seed_exercises(s: Session) -> List[str]:
+def _seed_value() -> int:
     """
-    Seed exercises if missing, returning their IDs in order.
+    _seed_value() -> int
+
+    Concise (one-line) description of the function.
+
+    Parameters
+    ----------
+    None
+        This function does not accept parameters.
+
+    Returns
+    -------
+    int
+        Deterministic seed value.
+
+    Examples
+    --------
+    >>> isinstance(_seed_value(), int)
+    True
     """
-    rows = [
+    return int(os.getenv("PENROSELAMARCK_SEED", str(DEFAULT_SEED)))
+
+
+def _stable_id(seed: int, name: str) -> str:
+    """
+    _stable_id(seed, name) -> str
+
+    Concise (one-line) description of the function.
+
+    Parameters
+    ----------
+    seed : int
+        Seed used to namespace identifiers.
+    name : str
+        Logical identifier name.
+
+    Returns
+    -------
+    str
+        Stable hexadecimal identifier string.
+
+    Examples
+    --------
+    >>> len(_stable_id(1, \"demo\")) == 64
+    True
+    """
+    payload = f"{seed}:{name}".encode()
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _content_hash(question: str, answer: str) -> str:
+    """
+    _content_hash(question, answer) -> str
+
+    Concise (one-line) description of the function.
+
+    Parameters
+    ----------
+    question : str
+        The question text.
+    answer : str
+        The answer text.
+
+    Returns
+    -------
+    str
+        SHA-256 hex digest over normalized content.
+
+    Examples
+    --------
+    >>> len(_content_hash(\"q\", \"a\")) == 64
+    True
+    """
+    canonical_q = " ".join(question.strip().split()).lower()
+    canonical_a = " ".join(answer.strip().split()).lower()
+    return hashlib.sha256((canonical_q + "\n" + canonical_a).encode("utf-8")).hexdigest()
+
+
+def _exercise_rows(seed: int) -> list[dict]:
+    """
+    _exercise_rows(seed) -> List[Dict]
+
+    Concise (one-line) description of the function.
+
+    Parameters
+    ----------
+    seed : int
+        Seed for deterministic ordering.
+
+    Returns
+    -------
+    List[Dict]
+        Exercise row payloads.
+
+    Examples
+    --------
+    >>> isinstance(_exercise_rows(1), list)
+    True
+    """
+    base = [
+        {"question": "hej", "answer": "hello", "language": "da", "tags": ["vocab"]},
+        {"question": "tak", "answer": "thanks", "language": "da", "tags": ["vocab"]},
+        {"question": "farvel", "answer": "goodbye", "language": "da", "tags": ["vocab"]},
+        {"question": "hej då", "answer": "goodbye", "language": "sv", "tags": ["vocab"]},
+        {"question": "tack", "answer": "thanks", "language": "sv", "tags": ["vocab"]},
+        {"question": "varsågod", "answer": "you're welcome", "language": "sv", "tags": ["phrase"]},
+    ]
+    rng = random.Random(seed)
+    rng.shuffle(base)
+    created_at = datetime(2024, 1, 1, 0, 0, 0)
+    rows = []
+    for idx, row in enumerate(base, start=1):
+        row_id = _stable_id(seed, f"exercise-{idx}")
+        rows.append({
+            "id": row_id,
+            "question": row["question"],
+            "answer": row["answer"],
+            "language": row["language"],
+            "tags": row["tags"],
+            "content_hash": _content_hash(row["question"], row["answer"]),
+            "created_at": created_at + timedelta(minutes=idx),
+        })
+    return rows
+
+
+def _session_rows(seed: int, exercise_ids: list[str]) -> list[dict]:
+    """
+    _session_rows(seed, exercise_ids) -> List[Dict]
+
+    Concise (one-line) description of the function.
+
+    Parameters
+    ----------
+    seed : int
+        Seed for deterministic identifiers.
+    exercise_ids : List[str]
+        Exercise identifiers to include.
+
+    Returns
+    -------
+    List[Dict]
+        Practice session row payloads.
+
+    Examples
+    --------
+    >>> isinstance(_session_rows(1, [\"e\"]), list)
+    True
+    """
+    first_group = exercise_ids[:3]
+    second_group = exercise_ids[3:]
+    return [
         {
-            "id": "e0000000000000000000000000000001",
-            "question": "hej",
-            "answer": "hello",
+            "session_id": _stable_id(seed, "session-1"),
             "language": "da",
-            "tags": ["vocab"],
-            "content_hash": "ch_e1",
+            "strategy": "mixed",
+            "target_count": len(first_group),
+            "status": "ended",
+            "started_at": datetime(2024, 1, 2, 9, 0, 0),
+            "ended_at": datetime(2024, 1, 2, 9, 30, 0),
+            "selected_exercise_ids": first_group,
         },
         {
-            "id": "e0000000000000000000000000000002",
-            "question": "tak",
-            "answer": "thanks",
-            "language": "da",
-            "tags": ["vocab"],
-            "content_hash": "ch_e2",
-        },
-        {
-            "id": "e0000000000000000000000000000003",
-            "question": "farvel",
-            "answer": "goodbye",
-            "language": "da",
-            "tags": ["vocab"],
-            "content_hash": "ch_e3",
+            "session_id": _stable_id(seed, "session-2"),
+            "language": "sv",
+            "strategy": "spaced",
+            "target_count": len(second_group),
+            "status": "ended",
+            "started_at": datetime(2024, 1, 3, 10, 0, 0),
+            "ended_at": datetime(2024, 1, 3, 10, 20, 0),
+            "selected_exercise_ids": second_group,
         },
     ]
-    ids = []
-    for r in rows:
-        existing = s.get(ExerciseORM, r["id"]) or s.scalar(
-            select(ExerciseORM.id).where(ExerciseORM.content_hash == r["content_hash"]) 
+
+
+def _attempt_rows(seed: int, sessions: list[dict]) -> list[dict]:
+    """
+    _attempt_rows(seed, sessions) -> List[Dict]
+
+    Concise (one-line) description of the function.
+
+    Parameters
+    ----------
+    seed : int
+        Seed for deterministic identifiers.
+    sessions : List[Dict]
+        Session payloads containing selected exercises.
+
+    Returns
+    -------
+    List[Dict]
+        Attempt row payloads.
+
+    Examples
+    --------
+    >>> filter = {"session_id": "s", "selected_exercise_ids": ["e"]}
+    >>> isinstance(_attempt_rows(1, [filter]), list)
+    True
+    """
+    attempts: list[dict] = []
+    for sess_index, sess in enumerate(sessions, start=1):
+        for ex_index, ex_id in enumerate(sess["selected_exercise_ids"], start=1):
+            attempt_id = _stable_id(seed, f"attempt-{sess_index}-{ex_index}")
+            attempts.append({
+                "id": attempt_id,
+                "session_id": sess["session_id"],
+                "exercise_id": ex_id,
+                "user_answer": "ok",
+                "score": 1.0 if ex_index % 2 == 1 else 0.6,
+                "passed": ex_index % 2 == 1,
+                "evaluated_at": sess["started_at"] + timedelta(minutes=ex_index * 3),
+            })
+    return attempts
+
+
+def _summary_rows(attempts: Iterable[dict]) -> list[dict]:
+    """
+    _summary_rows(attempts) -> List[Dict]
+
+    Concise (one-line) description of the function.
+
+    Parameters
+    ----------
+    attempts : Iterable[Dict]
+        Attempt payloads.
+
+    Returns
+    -------
+    List[Dict]
+        Performance summary payloads.
+
+    Examples
+    --------
+    >>> isinstance(_summary_rows([]), list)
+    True
+    """
+    aggregated: dict[str, dict] = {}
+    for attempt in attempts:
+        bucket = aggregated.setdefault(
+            attempt["exercise_id"],
+            {"total": 0, "passed": 0, "last": None},
         )
+        bucket["total"] += 1
+        if attempt["passed"]:
+            bucket["passed"] += 1
+        ts = attempt["evaluated_at"]
+        if bucket["last"] is None or ts > bucket["last"]:
+            bucket["last"] = ts
+    rows = []
+    for exercise_id, stats in aggregated.items():
+        total = stats["total"]
+        rows.append({
+            "exercise_id": exercise_id,
+            "total_attempts": total,
+            "pass_rate": (stats["passed"] / total) if total else 0.0,
+            "last_practiced_at": stats["last"],
+        })
+    return rows
+
+
+def _upsert(session: Session, model, rows: Iterable[dict], pk_field: str) -> None:
+    """
+    _upsert(session, model, rows, pk_field) -> None
+
+    Concise (one-line) description of the function.
+
+    Parameters
+    ----------
+    session : Session
+        Active SQLAlchemy session.
+    model : type
+        ORM model class.
+    rows : Iterable[Dict]
+        Row payloads to insert or update.
+    pk_field : str
+        Primary key field name.
+
+    Returns
+    -------
+    None
+        Inserts or updates rows idempotently.
+
+    Examples
+    --------
+    >>> callable(_upsert)
+    True
+    """
+    for row in rows:
+        pk_value = row[pk_field]
+        existing = session.get(model, pk_value)
         if not existing:
-            s.add(
-                ExerciseORM(
-                    id=r["id"],
-                    question=r["question"],
-                    answer=r["answer"],
-                    language=r["language"],
-                    tags=r["tags"],
-                    content_hash=r["content_hash"],
-                    created_at=datetime(2024, 1, 1, 0, 0, 0),
-                )
-            )
-        ids.append(r["id"])
-    return ids
+            session.add(model(**row))
+        else:
+            for key, value in row.items():
+                setattr(existing, key, value)
 
 
-def _seed_session(s: Session, exercise_ids: List[str]) -> str:
+def _ensure_unique_content_hashes(session: Session) -> None:
     """
-    Seed a practice session with a fixed id and selection.
+    _ensure_unique_content_hashes(session) -> None
+
+    Concise (one-line) description of the function.
+
+    Parameters
+    ----------
+    session : Session
+        Active SQLAlchemy session.
+
+    Returns
+    -------
+    None
+        Raises if duplicate content hashes exist.
+
+    Examples
+    --------
+    >>> callable(_ensure_unique_content_hashes)
+    True
     """
-    sess_id = "s0000000000000000000000000000001"
-    existing = s.get(PracticeSessionORM, sess_id)
-    if not existing:
-        s.add(
-            PracticeSessionORM(
-                session_id=sess_id,
-                language="da",
-                strategy="mixed",
-                target_count=3,
-                status="ended",
-                started_at=datetime(2024, 1, 2, 0, 0, 0),
-                ended_at=datetime(2024, 1, 2, 0, 30, 0),
-                selected_exercise_ids=exercise_ids,
-            )
-        )
-    return sess_id
+    hashes = session.scalars(select(Exercise.content_hash)).all()
+    if len(hashes) != len(set(hashes)):
+        raise ValueError("Duplicate exercise content_hash detected")
 
 
-def _seed_attempts(s: Session, session_id: str, exercise_ids: List[str]) -> None:
+def _emit_lineage(seed: int, inputs: list[str], outputs: list[str]) -> None:
     """
-    Seed two attempts with deterministic IDs.
+    _emit_lineage(seed, inputs, outputs) -> None
+
+    Concise (one-line) description of the function.
+
+    Parameters
+    ----------
+    seed : int
+        Seed value included in lineage metadata.
+    inputs : List[str]
+        Input dataset names.
+    outputs : List[str]
+        Output dataset names.
+
+    Returns
+    -------
+    None
+        Emits OpenLineage run events when configured.
+
+    Examples
+    --------
+    >>> callable(_emit_lineage)
+    True
     """
-    attempts = [
-        {
-            "id": "a0000000000000000000000000000001",
-            "exercise_id": exercise_ids[0],
-            "user_answer": "hello",
-            "score": 1.0,
-            "passed": True,
-            "evaluated_at": datetime(2024, 1, 2, 0, 5, 0),
-        },
-        {
-            "id": "a0000000000000000000000000000002",
-            "exercise_id": exercise_ids[1],
-            "user_answer": "thank you",
-            "score": 0.8,
-            "passed": True,
-            "evaluated_at": datetime(2024, 1, 2, 0, 10, 0),
-        },
-    ]
-    for a in attempts:
-        if not s.get(AttemptORM, a["id"]):
-            s.add(
-                AttemptORM(
-                    id=a["id"],
-                    session_id=session_id,
-                    exercise_id=a["exercise_id"],
-                    user_answer=a["user_answer"],
-                    score=a["score"],
-                    passed=a["passed"],
-                    evaluated_at=a["evaluated_at"],
-                )
-            )
+    emit_openlineage_run(
+        job_name="db_seed",
+        run_args={"seed": seed},
+        inputs=inputs,
+        outputs=outputs,
+    )
 
 
 def main() -> None:
@@ -151,13 +433,46 @@ def main() -> None:
     main() -> None
 
     Seed all tables with deterministic data. Safe to run multiple times.
+
+    Parameters
+    ----------
+    None
+        This function does not accept parameters.
+
+    Returns
+    -------
+    None
+        Seeds deterministic data and validates basic constraints.
+
+    Examples
+    --------
+    >>> isinstance(DEFAULT_SEED, int)
+    True
     """
+    seed = _seed_value()
     engine = create_engine(_db_url(), pool_pre_ping=True)
-    with Session(engine) as s:
-        ids = _seed_exercises(s)
-        sess_id = _seed_session(s, ids)
-        _seed_attempts(s, sess_id, ids)
-        s.commit()
+    exercises = _exercise_rows(seed)
+    exercise_ids = [row["id"] for row in exercises]
+    sessions = _session_rows(seed, exercise_ids)
+    attempts = _attempt_rows(seed, sessions)
+    summaries = _summary_rows(attempts)
+
+    try:
+        _emit_lineage(
+            seed,
+            inputs=["seed_inputs"],
+            outputs=["exercises", "practice_sessions", "attempts", "performance_summaries"],
+        )
+    except Exception as exc:  # pragma: no cover - defensive logging
+        print(f"[seed] OpenLineage emit failed: {exc}", file=sys.stderr)
+
+    with Session(engine) as session:
+        _upsert(session, Exercise, exercises, "id")
+        _upsert(session, PracticeSession, sessions, "session_id")
+        _upsert(session, Attempt, attempts, "id")
+        _upsert(session, PerformanceSummary, summaries, "exercise_id")
+        _ensure_unique_content_hashes(session)
+        session.commit()
 
 
 if __name__ == "__main__":

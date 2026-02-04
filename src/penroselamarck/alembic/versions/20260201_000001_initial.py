@@ -2,7 +2,7 @@
 Initial schema: exercises, practice_sessions, attempts
 
 Revision ID: 20260201_000001
-Revises: 
+Revises:
 Create Date: 2026-02-01 00:00:01
 """
 from __future__ import annotations
@@ -32,9 +32,6 @@ def upgrade() -> None:
         sa.Column('created_at', sa.DateTime(), nullable=False),
         sa.UniqueConstraint('content_hash', name='uq_exercises_content_hash'),
     )
-    # Add explicit indexes (since index=True on Column isn't applied here)
-    op.create_index('ix_exercises_language', 'exercises', ['language'])
-    op.create_index('ix_exercises_content_hash', 'exercises', ['content_hash'])
 
     op.create_table(
         'practice_sessions',
@@ -58,18 +55,12 @@ def upgrade() -> None:
         sa.Column('passed', sa.Boolean(), nullable=False),
         sa.Column('evaluated_at', sa.DateTime(), nullable=False),
     )
-    op.create_index('ix_attempts_session_id', 'attempts', ['session_id'])
-    op.create_index('ix_attempts_exercise_id', 'attempts', ['exercise_id'])
 
 
 def downgrade() -> None:
     """
     Drop all initial schema tables.
     """
-    op.drop_index('ix_attempts_exercise_id', table_name='attempts')
-    op.drop_index('ix_attempts_session_id', table_name='attempts')
     op.drop_table('attempts')
     op.drop_table('practice_sessions')
-    op.drop_index('ix_exercises_content_hash', table_name='exercises')
-    op.drop_index('ix_exercises_language', table_name='exercises')
     op.drop_table('exercises')
