@@ -140,7 +140,7 @@ services:
     ports:
       - "6274:6274"
     depends_on:
-      - mcp
+      - api
     networks:
       - penroselamarck
 
@@ -159,7 +159,7 @@ services:
     command: >
       sh -c "pip install -r tests/mcp/python-requirements.txt && python tests/mcp/fastmcp_client.py --sse-url http://penroselamarck-api:8080/v1/mcp/sse"
     depends_on:
-      - mcp
+      - api
     networks:
       - penroselamarck
 
