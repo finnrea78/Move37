@@ -14,13 +14,13 @@ router : APIRouter
 
 Examples
 --------
->>> from penroselamarck.mcp.routers.mcp import router
+>>> from penroselamarck.api.routers.mcp import router
 >>> router.prefix
 ''
 
 See Also
 --------
-:mod:`penroselamarck.mcp.transport`
+:mod:`penroselamarck.api.transport`
 """
 
 from __future__ import annotations
@@ -30,8 +30,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from penroselamarck.mcp.dependencies import get_mcp_transport, get_service_container
-from penroselamarck.mcp.transport import McpHttpTransport
+from penroselamarck.api.dependencies import get_mcp_transport, get_service_container
+from penroselamarck.api.transport import McpHttpTransport
 from penroselamarck.services.container import ServiceContainer
 from penroselamarck.services.errors import ServiceError
 

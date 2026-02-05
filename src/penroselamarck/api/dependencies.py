@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from fastapi import Request
 
-from penroselamarck.mcp.transport import McpHttpTransport
+from penroselamarck.api.transport import McpHttpTransport
 from penroselamarck.services.container import ServiceContainer
 
 

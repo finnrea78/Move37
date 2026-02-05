@@ -14,7 +14,7 @@ router : APIRouter
 
 Examples
 --------
->>> from penroselamarck.mcp.routers.rest.auth import router
+>>> from penroselamarck.api.routers.rest.auth import router
 >>> router.prefix
 ''
 
@@ -29,8 +29,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from penroselamarck.mcp.dependencies import get_service_container
-from penroselamarck.mcp.schemas import LoginInput, LoginOutput
+from penroselamarck.api.dependencies import get_service_container
+from penroselamarck.api.schemas import LoginInput, LoginOutput
 from penroselamarck.services.container import ServiceContainer
 from penroselamarck.services.errors import ServiceError
 

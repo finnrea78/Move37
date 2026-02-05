@@ -23,7 +23,7 @@ True
 
 See Also
 --------
-:mod:`penroselamarck.mcp.transport`
+:mod:`penroselamarck.api.transport`
 """
 
 from __future__ import annotations

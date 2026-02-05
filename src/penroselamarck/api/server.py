@@ -15,14 +15,14 @@ app : FastAPI
 
 Examples
 --------
->>> from penroselamarck.mcp.server import create_app
+>>> from penroselamarck.api.server import create_app
 >>> app = create_app()
 >>> hasattr(app, "router")
 True
 
 See Also
 --------
-:mod:`penroselamarck.mcp.routers.v1`
+:mod:`penroselamarck.api.routers.v1`
 """
 
 from __future__ import annotations
@@ -30,10 +30,10 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 
-from penroselamarck.mcp.routers.oauth import router as oauth_router
-from penroselamarck.mcp.routers.v1 import build_v1_router
-from penroselamarck.mcp.tool_registry import McpToolRegistry
-from penroselamarck.mcp.transport import McpHttpTransport
+from penroselamarck.api.routers.oauth import router as oauth_router
+from penroselamarck.api.routers.v1 import build_v1_router
+from penroselamarck.api.tool_registry import McpToolRegistry
+from penroselamarck.api.transport import McpHttpTransport
 from penroselamarck.services.container import ServiceContainer
 
 

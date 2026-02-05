@@ -21,7 +21,7 @@ True
 
 See Also
 --------
-:mod:`penroselamarck.mcp.schemas`
+:mod:`penroselamarck.api.schemas`
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from penroselamarck.mcp import schemas
+from penroselamarck.api import schemas
 from penroselamarck.schemas.performance_summary import PerformanceSummary
 from penroselamarck.services.container import ServiceContainer
 

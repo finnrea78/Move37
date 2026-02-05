@@ -13,21 +13,21 @@ None
 
 Examples
 --------
->>> from penroselamarck.mcp.routers.v1 import build_v1_router
+>>> from penroselamarck.api.routers.v1 import build_v1_router
 >>> build_v1_router().prefix
 '/v1'
 
 See Also
 --------
-:mod:`penroselamarck.mcp.routers.rest`
+:mod:`penroselamarck.api.routers.rest`
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter
 
-from penroselamarck.mcp.routers.mcp import router as mcp_router
-from penroselamarck.mcp.routers.rest import build_rest_router
+from penroselamarck.api.routers.mcp import router as mcp_router
+from penroselamarck.api.routers.rest import build_rest_router
 
 
 def build_v1_router() -> APIRouter:

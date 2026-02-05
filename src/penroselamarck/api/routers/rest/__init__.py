@@ -15,20 +15,20 @@ router : APIRouter
 
 Examples
 --------
->>> from penroselamarck.mcp.routers.rest import router
+>>> from penroselamarck.api.routers.rest import router
 >>> router.prefix
 ''
 
 See Also
 --------
-:mod:`penroselamarck.mcp.routers.rest.auth`
+:mod:`penroselamarck.api.routers.rest.auth`
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter
 
-from penroselamarck.mcp.routers.rest import auth, context, exercise, metrics, practice, train
+from penroselamarck.api.routers.rest import auth, context, exercise, metrics, practice, train
 
 router = APIRouter()
 router.include_router(auth.router)

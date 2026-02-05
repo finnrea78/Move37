@@ -16,14 +16,14 @@ DEFAULT_PROTOCOL_VERSION : str
 Examples
 --------
 >>> from penroselamarck.services.container import ServiceContainer
->>> from penroselamarck.mcp.tool_registry import McpToolRegistry
+>>> from penroselamarck.api.tool_registry import McpToolRegistry
 >>> transport = McpHttpTransport(McpToolRegistry(ServiceContainer()))
 >>> isinstance(transport, McpHttpTransport)
 True
 
 See Also
 --------
-:mod:`penroselamarck.mcp.tool_registry`
+:mod:`penroselamarck.api.tool_registry`
 """
 
 from __future__ import annotations
@@ -37,8 +37,8 @@ from typing import Any
 from fastapi import Request
 from fastapi.responses import StreamingResponse
 
-from penroselamarck.mcp import __version__ as mcp_version
-from penroselamarck.mcp.tool_registry import McpToolRegistry
+from penroselamarck.api import __version__ as mcp_version
+from penroselamarck.api.tool_registry import McpToolRegistry
 from penroselamarck.services.errors import ServiceError
 
 DEFAULT_PROTOCOL_VERSION = "2024-11-05"

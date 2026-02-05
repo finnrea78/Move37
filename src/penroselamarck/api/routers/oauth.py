@@ -14,7 +14,7 @@ router : APIRouter
 
 Examples
 --------
->>> from penroselamarck.mcp.routers.oauth import router
+>>> from penroselamarck.api.routers.oauth import router
 >>> router.prefix
 ''
 

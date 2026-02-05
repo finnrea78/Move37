@@ -13,4 +13,4 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app/src
 
 EXPOSE 8080
-CMD ["uvicorn", "penroselamarck.mcp.server:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "penroselamarck.api.server:app", "--host", "0.0.0.0", "--port", "8080"]
