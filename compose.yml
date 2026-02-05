@@ -71,6 +71,20 @@ services:
   ##    curl -s http://penroselamarck-mcp:8080/v1/auth/me | jq
   ##    curl -s http://penroselamarck-mcp:8080/health | jq
   ##    curl -N -H 'Accept: text/event-stream' http://penroselamarck-mcp:8080/v1/mcp/sse
+  ##
+  ##    curl -N -H 'Accept: text/event-stream' http://localhost:8080/v1/mcp/sse
+  ##
+  ##    export SESSION_ID=981ba8457164413296f9a2e49a3f78b6
+  ##    export MCP_ENDPOINT="http://penroselamarck-mcp:8080/v1/mcp/messages?session_id=$SESSION_ID"
+  ##
+  ##    (see SSE for logs)
+  ##    curl -s -X POST "$MCP_ENDPOINT" \
+  ##        -H 'Content-Type: application/json' \
+  ##        -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+  ##
+  ##    curl -s -X POST "$MCP_ENDPOINT" \
+  ##        -H 'Content-Type: application/json' \
+  ##        -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":""auth.login","arguments":{"token":"dev"}}}'
   mcp:
     build:
       context: .
@@ -84,6 +98,54 @@ services:
       - DATABASE_URL=postgresql://penroselamarck:penroselamarck@db:5432/penroselamarck
     depends_on:
       - db
+    networks:
+      - penroselamarck
+
+  ## mcp inspector ##############################################################
+  ##
+  ## run inspector
+  ##
+  ##    docker compose run --rm --service-ports mcp-inspector
+  ##
+  ## debug
+  ##
+  ##      curl http://penroselamarck-mcp-inspector:6274 (devcontainer)
+  ##      curl http://localhost:6274 (host)
+  ##
+  ## run
+  ##
+  ##   Open http://localhost:6274 in your browser and connect to mcp at
+  mcp-inspector:
+    image: node:20-alpine
+    container_name: penroselamarck-mcp-inspector
+    working_dir: /workspace
+    volumes:
+      - ${HOST_WORKSPACE}:/workspace
+    command: >
+      sh -c "npx --yes @modelcontextprotocol/inspector --config /workspace/tests/mcp/config.json --server penroselamarck"
+    ports:
+      - "6274:6274"
+    depends_on:
+      - mcp
+    networks:
+      - penroselamarck
+
+  ## fastmcp client ##############################################################
+  ##
+  ## run smoke test
+  ##
+  ##    docker compose run --rm mcp-fastmcp
+  ##
+  mcp-fastmcp:
+    image: python:3.11-slim
+    container_name: penroselamarck-mcp-fastmcp
+    working_dir: /workspace
+    volumes:
+      - ${HOST_WORKSPACE}:/workspace
+    command: >
+      sh -c "pip install -r tests/mcp/python-requirements.txt && python tests/mcp/fastmcp_client.py --sse-url http://penroselamarck-mcp:8080/v1/mcp/sse"
+    depends_on:
+      - mcp
     networks:
       - penroselamarck
 
