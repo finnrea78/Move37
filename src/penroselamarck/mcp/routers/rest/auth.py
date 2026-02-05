@@ -27,11 +27,12 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from penroselamarck.mcp.dependencies import get_service_container
 from penroselamarck.mcp.schemas import LoginInput, LoginOutput
 from penroselamarck.services.container import ServiceContainer
+from penroselamarck.services.errors import ServiceError
 
 router = APIRouter()
 
@@ -58,7 +59,13 @@ def auth_login(
     LoginOutput
         Authenticated user information.
     """
-    user = services.auth_service.login(payload.token)
+    try:
+        user = services.auth_service.login(payload.token)
+    except ServiceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=exc.message,
+        ) from exc
     return LoginOutput(userId=user.user_id, roles=user.roles)
 
 

@@ -30,6 +30,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 
+from penroselamarck.mcp.routers.oauth import router as oauth_router
 from penroselamarck.mcp.routers.v1 import build_v1_router
 from penroselamarck.mcp.tool_registry import McpToolRegistry
 from penroselamarck.mcp.transport import McpHttpTransport
@@ -100,6 +101,7 @@ def create_app() -> FastAPI:
         """
         services.schema_service.create_schema()
 
+    app.include_router(oauth_router)
     app.include_router(build_v1_router())
 
     return app

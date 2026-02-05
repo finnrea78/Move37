@@ -7,6 +7,7 @@ Public API
 ----------
 - :mod:`penroselamarck.mcp.routers.rest`: REST router assembly.
 - :mod:`penroselamarck.mcp.routers.mcp`: MCP transport router.
+- :mod:`penroselamarck.mcp.routers.oauth`: OAuth protected resource metadata router.
 - :mod:`penroselamarck.mcp.routers.v1`: v1 router assembly.
 
 Attributes

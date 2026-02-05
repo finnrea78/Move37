@@ -90,27 +90,46 @@ class UserRepository:
         self._users_by_token: dict[str, UserRecord] = {}
         self._demo_token = "demo"
 
-    def get_or_create(self, token: str) -> UserRecord:
+    def get_or_create(
+        self,
+        token: str,
+        user_id: str | None = None,
+        roles: list[str] | None = None,
+    ) -> UserRecord:
         """
-        get_or_create(token) -> UserRecord
+        get_or_create(token, user_id=None, roles=None) -> UserRecord
 
         Concise (one-line) description of the function.
 
         Parameters
         ----------
         token : str
-            Authentication token.
+            Authentication token or identity key.
+        user_id : Optional[str]
+            Stable identifier to assign to the user.
+        roles : Optional[List[str]]
+            Roles assigned to the user.
 
         Returns
         -------
         UserRecord
             Existing or newly created user record.
+
+        Examples
+        --------
+        >>> repo = UserRepository()
+        >>> record = repo.get_or_create("subject", user_id="subject", roles=["user"])
+        >>> record.user_id == "subject"
+        True
         """
         with self._lock:
             existing = self._users_by_token.get(token)
             if existing:
                 return existing
-            record = UserRecord(user_id=str(uuid.uuid4()), roles=["user"])
+            record = UserRecord(
+                user_id=user_id or str(uuid.uuid4()),
+                roles=roles or ["user"],
+            )
             self._users_by_token[token] = record
             return record
 
@@ -129,6 +148,12 @@ class UserRepository:
         -------
         Optional[UserRecord]
             User record if it exists.
+
+        Examples
+        --------
+        >>> repo = UserRepository()
+        >>> repo.get_by_token("missing") is None
+        True
         """
         with self._lock:
             return self._users_by_token.get(token)
