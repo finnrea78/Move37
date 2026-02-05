@@ -1,8 +1,12 @@
 {
   "mcpServers": {
-    "penroselamarck": {
+    "penroselamarck-devcontainer": {
       "type": "sse",
       "url": "http://penroselamarck-mcp:8080/v1/mcp/sse"
+    },
+    "penroselamarck": {
+      "type": "sse",
+      "url": "http://localhost:8080/v1/mcp/sse"
     }
   }
 }
