@@ -61,7 +61,9 @@ Motivation
 Auth0 Setup (MCP + Codex CLI)
 -----------------------------
 
-Use this when connecting Codex CLI to the MCP server with Auth0.
+Use this when connecting Codex CLI to the MCP server with Auth0. Codex CLI performs OAuth via
+Dynamic Client Registration (DCR), so the MCP server must explicitly support OAuth and expose
+the protected resource metadata endpoint. The flow used is **Authorization Code + PKCE**.
 
 1. Auth0 Dashboard: create an **API** and set its **Identifier** to your audience
    (e.g. ``https://penroselamarck/``).
@@ -69,8 +71,11 @@ Use this when connecting Codex CLI to the MCP server with Auth0.
    **Enable Application Connections**.
    - Navigation: ``Settings → Advanced``.
 3. Ensure at least one connection exists (Database or Social).
-4. Promote that connection to **domain level**, so third‑party (DCR) clients can use it.
-   - You **must** obtain a Management API token using ``Applications → APIs → Auth0 Management API → API Explorer``. Without this token, the commands below will fail.
+4. Promote that connection to **domain level**. DCR creates **third‑party** clients that cannot
+   be enabled per‑app, so domain‑level promotion is required for DCR logins to work.
+   - You **must** obtain a Management API token using
+     ``Applications → APIs → Auth0 Management API → API Explorer``.
+     Without this token, the commands below will fail.
 
 .. code-block:: bash
 
@@ -98,7 +103,8 @@ Use this when connecting Codex CLI to the MCP server with Auth0.
 
 6. Configure Codex CLI and login:
    - Set ``mcp_oauth_callback_port = 1455`` in ``~/.codex/config.toml``.
-   - Ensure the Auth0 application callback URL includes ``http://localhost:1455/auth/callback``.
+   - The callback URL is **not** the MCP server. It is the local loopback URL Codex listens on.
+     Ensure the Auth0 application callback URL includes ``http://localhost:1455/auth/callback``.
    - Run:
 
 .. code-block:: bash
