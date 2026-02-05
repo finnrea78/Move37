@@ -9,5 +9,6 @@
 .dotnet
 .gnupg
 .env
+.mcp.vscode.json
 .npm
 node_modules

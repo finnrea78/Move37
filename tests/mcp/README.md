@@ -5,6 +5,21 @@ This folder contains two ways to exercise the MCP server over HTTP/SSE.
 ## MCP Inspector (interactive)
 
 1. Ensure the MCP server is running at `http://penroselamarck-mcp:8080`.
+
+### Container
+
+2. Run the inspector container:
+
+```bash
+docker compose run --rm --service-ports mcp-inspector
+```
+
+3. Open the URL shown in the inspector logs (commonly `http://localhost:5173` or
+   `http://localhost:6274`), select the `penroselamarck` server, then run
+   `tools/list` and call each tool.
+
+### Local
+
 2. Run the inspector with the provided config:
 
 ```bash
@@ -16,6 +31,16 @@ npx @modelcontextprotocol/inspector \
 3. Select the `penroselamarck` server, then run `tools/list` and call each tool.
 
 ## FastMCP client (scripted)
+
+### Container
+
+1. Run the FastMCP smoke test container:
+
+```bash
+docker compose run --rm mcp-fastmcp
+```
+
+### Local
 
 1. Install test dependencies:
 
