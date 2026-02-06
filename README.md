@@ -5,14 +5,43 @@ Live documentation: https://genentech.github.io/penrose-lamarck/
 ## Getting Started
 
 ```sh
+ ❯ codex
+ ⚠ The penroselamarck MCP server is not logged in. Run `codex mcp login penroselamarck`.
+
+ ⚠ MCP startup incomplete (failed: penroselamarck)
+```
+
+```sh
  ❯ codex mcp list
  Name            Url                                        Bearer Token Env Var  Status   Auth
  penroselamarck  http://penroselamarck-api:8080/v1/mcp/sse  -                     enabled  OAuth
+```
 
+```sh
  ❯ codex mcp login penroselamarck
- Successfully logged in to MCP server 'penroselamarck'.
+ Authorize `penroselamarck` by opening this URL in your browser:
+ https://...
 
+ Successfully logged in to MCP server 'penroselamarck'.
+```
+
+```sh
  ❯ codex
+ /mcp
+
+ 🔌  MCP Tools
+
+   • penroselamarck
+     • Status: enabled
+     • Auth: OAuth
+     • URL: http://penroselamarck-api:8080/v1/mcp/sse
+     • Tools: auth_login, auth_me, exercise_create, exercise_list, metrics_performance, practice_end, practice_next, practice_start, practice_submit, study_context_get, study_context_set, train_import
+     • Resources: (none)
+     • Resource templates: (none)
+```
+
+```sh
+ ❯ codex mcp logout penroselamarck
 ```
 
 ## Contributing
