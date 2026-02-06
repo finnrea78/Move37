@@ -2,25 +2,26 @@ Manifest
 ============
 
 .. toctree::
-	:maxdepth: 2
-	:titlesonly:
+   :maxdepth: 2
+   :titlesonly:
 
-    CEM-000.rst
-    CEM-001.rst
-    CEM-002-storage.rst
-    CEM-003.rst
-    CEM-004.rst
-    CEM-006-git.rst
-    CEM-007.rst
-    CEM-008.rst
-    CEM-009-dev.rst
-    CEM-010.rst
-    CEM-011-modus.rst
-    CEM-012-docs.rst
-    CEM-013-auth.rst
-    CEM-014-llm.rst
-    CEM-015-async.rst
-    CEM-016-sync.rst
-    CEM-017-policy.rst
-    CEM-018-audit.rst
-    CEM-019-code-std.rst
+   CEM-000
+   CEM-001
+   CEM-002-storage
+   CEM-003
+   CEM-004
+   CEM-006-git
+   CEM-007
+   CEM-008
+   CEM-009-dev
+   CEM-010
+   CEM-011-modus
+   CEM-012-docs
+   CEM-013-auth
+   CEM-014-llm
+   CEM-015-async
+   CEM-016-sync
+   CEM-017-policy
+   CEM-018-audit
+   CEM-019-code-std
+   CEM-020-lint
