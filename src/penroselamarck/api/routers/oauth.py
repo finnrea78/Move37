@@ -39,7 +39,7 @@ def _normalize_base_url(value: str) -> str:
     """
     _normalize_base_url(value) -> str
 
-    Concise (one-line) description of the function.
+    TODO x -> x
 
     Parameters
     ----------
@@ -53,10 +53,10 @@ def _normalize_base_url(value: str) -> str:
 
     Examples
     --------
-    >>> _normalize_base_url("http://localhost:8080/")
-    'http://localhost:8080'
+    >>> _normalize_base_url("http://penroselamarck-api:8080/")
+    'http://penroselamarck-api:8080/'
     """
-    return value.rstrip("/")
+    return value
 
 
 def _resolve_resource_url(request: Request) -> str:
@@ -83,15 +83,6 @@ def _resolve_resource_url(request: Request) -> str:
     explicit = os.environ.get("MCP_RESOURCE_URL")
     if explicit:
         return _normalize_base_url(explicit)
-    resource_urls = os.environ.get("MCP_RESOURCE_URLS")
-    if resource_urls:
-        candidates = [_normalize_base_url(value) for value in resource_urls.split(",") if value]
-        request_base = _normalize_base_url(str(request.base_url))
-        for candidate in candidates:
-            if candidate == request_base:
-                return candidate
-        if candidates:
-            return candidates[0]
     return _normalize_base_url(str(request.base_url))
 
 

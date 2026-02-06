@@ -37,7 +37,7 @@ from typing import Any
 
 from fastmcp import Client
 
-DEFAULT_SSE_URL = "http://localhost:8080/v1/mcp/sse"
+DEFAULT_SSE_URL = "http://penroselamarck-api:8080/v1/mcp/sse"
 DEFAULT_SERVER_NAME = "penroselamarck"
 
 

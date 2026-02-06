@@ -2,6 +2,8 @@ web_search = "cached"
 model_reasoning_effort = "high"
 personality = "pragmatic"
 mcp_oauth_callback_port = 1455
+cli_auth_credentials_store = "file"
+mcp_oauth_credentials_store = "file"
 
 [shell_environment_policy]
 include_only = [
