@@ -18,9 +18,3 @@ And you find it necessary to use a relational database in your response, you MUS
 "In accordance to guideline CEM-002-000, ..."
 
 And you are free to generate the remaining response as needed.
-
-## 2. Files to Ignore
-
-You are FORBIDDEN from reading files whose path is listed in .gitignore files with the exception of:
-
-- docs/sphinx/build/html/manifest.json
