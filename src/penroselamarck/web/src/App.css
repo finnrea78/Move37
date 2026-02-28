@@ -1,0 +1,212 @@
+.app-shell {
+  --bg0: #050814;
+  --bg1: #0a1732;
+  --bg2: #10284d;
+  --panel: #0f1c33bf;
+  --panel-border: #84b6ff2b;
+  --text-main: #f2f8ff;
+  --text-soft: #95add0;
+  --accent: #8ee8ff;
+  min-height: 100dvh;
+  position: relative;
+  display: block;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 18% -5%, #2f5bb52b 0%, transparent 45%),
+    radial-gradient(circle at 84% 8%, #3dd5ff1f 0%, transparent 34%),
+    linear-gradient(165deg, var(--bg0) 0%, var(--bg1) 52%, var(--bg2) 100%);
+  color: var(--text-main);
+}
+
+.topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 6;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 0.38rem 0.58rem 0.2rem;
+  pointer-events: none;
+}
+
+.eyebrow {
+  margin: 0;
+  color: #8fa7cb;
+  letter-spacing: 0.1em;
+  font: 700 0.56rem/1.1 "IBM Plex Mono", "Courier New", monospace;
+}
+
+.brand h1 {
+  margin: 0.02rem 0;
+  font: 700 clamp(1.18rem, 2.15vw, 1.72rem) / 1.01 "Sora", "Avenir Next", sans-serif;
+}
+
+.status {
+  margin: 0;
+  color: var(--text-soft);
+  font: 500 0.66rem/1.2 "IBM Plex Sans", "Avenir Next", sans-serif;
+}
+
+.github-link {
+  width: 1.75rem;
+  height: 1.75rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid #8cb4ff2e;
+  background: #0b172c96;
+  box-shadow: 0 0 0 1px #0f264b80 inset;
+  transition:
+    transform 180ms ease,
+    box-shadow 240ms ease,
+    border-color 200ms ease;
+  pointer-events: auto;
+}
+
+.github-link:hover {
+  transform: translateY(-1px) scale(1.04);
+  border-color: #9fe8ff5f;
+  box-shadow: 0 0 24px #6cd7ff45;
+}
+
+.github-link img {
+  width: 1.02rem;
+  height: 1.02rem;
+  opacity: 0.92;
+  filter: invert(1) contrast(1.1) brightness(1.05);
+}
+
+.sphere-area {
+  margin: 0;
+  border-radius: 0;
+  border: 0;
+  background:
+    radial-gradient(circle at 50% 50%, #89c5ff0d 0%, transparent 48%),
+    radial-gradient(circle at 50% 50%, #00000000 56%, #01040cdd 100%),
+    linear-gradient(180deg, #a2cbff05 0%, #0a183600 100%);
+  min-height: 100dvh;
+  height: 100dvh;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+
+.brand {
+  pointer-events: auto;
+}
+
+.sphere-area.dragging {
+  cursor: grabbing;
+}
+
+.sphere-area svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.node-halo {
+  fill: #7dc8ff17;
+}
+
+.node-halo.active {
+  fill: #8ef2ff4f;
+}
+
+.node-core {
+  fill: #9dc3ff;
+  stroke: #d7ebff;
+  stroke-width: 1;
+  cursor: pointer;
+}
+
+.node-core.active {
+  fill: #9ff4ff;
+  stroke: #f5fdff;
+  stroke-width: 1.7;
+}
+
+.node-uri {
+  fill: #d9ebff;
+  font: 500 0.48rem/1.1 "IBM Plex Mono", "Courier New", monospace;
+  pointer-events: auto;
+  user-select: none;
+}
+
+.details-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: end start;
+  background: #02060f55;
+  z-index: 8;
+}
+
+.details-modal {
+  margin: 0 0 0.9rem 0.9rem;
+  width: min(34rem, calc(100vw - 1.4rem));
+  max-height: min(52vh, 28rem);
+  overflow: auto;
+  border-radius: 0.78rem;
+  border: 1px solid #8fb8ff40;
+  background: #09182cc2;
+  backdrop-filter: blur(10px);
+  padding: 0.78rem 0.8rem;
+  box-shadow: 0 14px 44px #000d20aa;
+}
+
+.details-modal h2 {
+  margin: 0 0 0.3rem;
+  font: 700 1.03rem/1.2 "Sora", "Avenir Next", sans-serif;
+  color: #f2f9ff;
+}
+
+.details-modal p {
+  margin: 0.22rem 0 0;
+  color: #d5e5ff;
+  font: 500 0.82rem/1.35 "IBM Plex Sans", "Avenir Next", sans-serif;
+}
+
+.details-modal strong {
+  color: #9dc8ff;
+  font-weight: 700;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.36rem;
+  margin-top: 0.3rem;
+}
+
+.chip {
+  border-radius: 999px;
+  border: 1px solid #8ec8ff55;
+  background: #18315599;
+  color: #d9edff;
+  padding: 0.16rem 0.46rem;
+  font: 700 0.68rem/1 "IBM Plex Sans", "Avenir Next", sans-serif;
+}
+
+.small {
+  color: #9fb9db !important;
+  font-family: "IBM Plex Mono", "Courier New", monospace !important;
+}
+
+@media (max-width: 780px) {
+  .topbar {
+    align-items: center;
+  }
+
+  .status {
+    max-width: 82vw;
+  }
+
+  .sphere-area {
+    min-height: 100dvh;
+    height: 100dvh;
+  }
+}
