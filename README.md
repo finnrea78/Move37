@@ -4,25 +4,40 @@ Live documentation: https://genentech.github.io/penrose-lamarck/
 
 ## Getting Started
 
+Codex CLI MCP testing must be done from the host machine (outside devcontainer).
+
+- `penroselamarck-local` (`http://localhost:8080/...`) is the supported endpoint for Codex CLI.
+- `penroselamarck-api` hostnames are Docker-network/devcontainer-only and are not reachable from host-side Codex CLI.
+
+### Local No-Auth Mode (`AUTH_DISABLED=true`)
+
+For local development, set `AUTH_DISABLED=true` in [`src/penroselamarck/api/.env`](src/penroselamarck/api/.env) and run `db` + `api`.
+
+In this mode:
+
+- Codex should show `Auth: Unsupported` for `penroselamarck-local`.
+- OAuth discovery probes may still be attempted by the MCP client and will return `404`.
+- Those `404` responses are expected and do not indicate an API failure.
+
 ```sh
  ❯ codex
- ⚠ The penroselamarck MCP server is not logged in. Run `codex mcp login penroselamarck`.
+ ⚠ The penroselamarck-local MCP server is not logged in. Run `codex mcp login penroselamarck-local`.
 
- ⚠ MCP startup incomplete (failed: penroselamarck)
+ ⚠ MCP startup incomplete (failed: penroselamarck-local)
 ```
 
 ```sh
  ❯ codex mcp list
  Name            Url                                        Bearer Token Env Var  Status   Auth
- penroselamarck  http://penroselamarck-api:8080/v1/mcp/sse  -                     enabled  OAuth
+ penroselamarck-local  http://localhost:8080/v1/mcp/sse  -                     enabled  Unsupported
 ```
 
 ```sh
- ❯ codex mcp login penroselamarck
- Authorize `penroselamarck` by opening this URL in your browser:
+ ❯ codex mcp login penroselamarck-local
+ Authorize `penroselamarck-local` by opening this URL in your browser:
  https://...
 
- Successfully logged in to MCP server 'penroselamarck'.
+ Successfully logged in to MCP server 'penroselamarck-local'.
 ```
 
 ```sh
@@ -31,18 +46,229 @@ Live documentation: https://genentech.github.io/penrose-lamarck/
 
  🔌  MCP Tools
 
-   • penroselamarck
+   • penroselamarck-devcontainer
+     • Status: enabled
+     • Auth: Unsupported
+     • URL: http://penroselamarck-api:8080/v1/mcp/sse
+     • Tools: (none)
+     • Resources: (none)
+     • Resource templates: (none)
+
+   • penroselamarck-local
      • Status: enabled
      • Auth: OAuth
-     • URL: http://penroselamarck-api:8080/v1/mcp/sse
-     • Tools: auth_login, auth_me, exercise_create, exercise_list, metrics_performance, practice_end, practice_next, practice_start, practice_submit, study_context_get, study_context_set, train_import
+     • URL: http://localhost:8080/v1/mcp/sse
+     • Tools: auth_login, auth_me, exercise_classify, exercise_create, exercise_graph, exercise_list, exercise_search, metrics_performance, practice_end, practice_next, practice_start, practice_submit, study_context_get, study_context_set, train_import
      • Resources: (none)
      • Resource templates: (none)
 ```
 
+If you see `penroselamarck-devcontainer` with `Auth: Unsupported` and `Tools: (none)`, keep using `penroselamarck-local` and optionally remove the stale entry:
+
 ```sh
- ❯ codex mcp logout penroselamarck
+ ❯ codex mcp remove penroselamarck-devcontainer
 ```
+
+```sh
+ ❯ codex mcp logout penroselamarck-local
+```
+
+## Conceptual Architecture and State Machines
+
+This section explains how Penrose-Lamarck features behave conceptually, independent of client (web, MCP, CLI) and implementation details.
+
+### Technical Architecture (Conceptual)
+
+```mermaid
+flowchart LR
+    subgraph Clients[Clients]
+        U[User]
+        C[Codex CLI / MCP Clients]
+        W[Web UI]
+    end
+
+    subgraph API[API Layer]
+        M[MCP Transport<br>/v1/mcp/sse]
+        R[REST Routers<br>/v1/*]
+        T[MCP Tool Registry]
+    end
+
+    subgraph Services[Domain Services]
+        PS[PracticeService]
+        ES[ExerciseService]
+        TS[TrainService]
+        MS[MetricsService]
+        CS[ContextService / AuthService]
+    end
+
+    subgraph Data[Persistence Layer]
+        DB[(Postgres)]
+        EX[(exercises)]
+        SS[(practice_sessions)]
+        AT[(attempts)]
+        PF[(performance_summaries)]
+    end
+
+    subgraph Orch[Orchestration Layer]
+        LG[LangGraph Orchestrator]
+        PP[Post-processing<br/>classify, graph, search]
+    end
+
+    subgraph Obs[Observability]
+        OT[OpenTelemetry]
+        MON[Prometheus / Grafana / Loki]
+    end
+
+    U --> C
+    U --> W
+    C --> M
+    W --> R
+    M --> T
+    T --> PS
+    T --> ES
+    T --> TS
+    T --> MS
+    R --> PS
+    R --> ES
+    R --> TS
+    R --> MS
+    R --> CS
+
+    PS --> DB
+    ES --> DB
+    TS --> DB
+    MS --> DB
+    DB --> EX
+    DB --> SS
+    DB --> AT
+    DB --> PF
+
+    ES --> LG
+    LG --> PP
+    PP --> DB
+
+    API --> OT
+    Services --> OT
+    Orch --> OT
+    OT --> MON
+```
+
+### Unified Runtime Flow (Conceptual)
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Client as CLI/Web/MCP Client
+    participant API as API/MCP Transport
+    participant Router as Router + Tool Registry
+    participant Services as Domain Services
+    participant DB as Postgres
+    participant Orch as Orchestrator
+
+    User->>Client: Request action
+    Client->>API: Send MCP or REST call
+    API->>Router: Validate and route
+
+    alt Training Session
+        Router->>Orch: Resolve training intent + constraints
+        Orch-->>Router: language/strategy/count
+        Router->>Services: practice.start / next / submit / end
+        loop Per exercise
+            Services->>DB: Read exercise + write attempt
+            DB-->>Services: Persisted state
+            Services-->>Client: Question, score, feedback
+        end
+    else Logging Session
+        Router->>Services: exercise.create or train.import
+        Services->>DB: Deduplicate + persist exercise(s)
+        Services->>Orch: Trigger classify/graph/search cycle
+        Orch->>DB: Update derived metadata
+        Services-->>Client: Created/duplicate summary
+    else Performance Assessment
+        Router->>Services: metrics.performance
+        Services->>DB: Aggregate attempts by exercise
+        DB-->>Services: Items + aggregates
+        Services-->>Client: Metrics payload
+    end
+
+    Client-->>User: Render result in UI/CLI
+```
+
+### Training Session State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> SessionRequested
+    SessionRequested --> IntentRouted: user or MCP starts training
+    IntentRouted --> IntentResolved: LangGraph orchestrator resolves intent
+    IntentResolved --> ContextReady: language/strategy/count resolved
+    ContextReady --> ExerciseBatchPrepared: select exercises
+    ExerciseBatchPrepared --> AwaitingAnswer: send next question
+    AwaitingAnswer --> AnswerSubmitted: user submits answer
+    AnswerSubmitted --> AnswerScored: evaluate answer
+    AnswerScored --> ProgressUpdated: record attempt + refresh readiness
+    ProgressUpdated --> AwaitingAnswer: exercises remaining
+    ProgressUpdated --> SessionCompleted: no remaining exercises
+    SessionCompleted --> SessionClosed: explicit or implicit end
+    SessionClosed --> [*]
+
+    IntentRouted --> SessionFailed: unsupported intent
+    IntentResolved --> SessionFailed: invalid context
+    ContextReady --> SessionFailed: no exercises available
+    SessionFailed --> [*]
+```
+
+### Logging Session State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> SessionRequested
+    SessionRequested --> IntentResolved: User or MCP requests data logging
+    IntentResolved --> PayloadNormalized: parse and normalize input
+    PayloadNormalized --> DuplicateCheck: compute content hash
+    DuplicateCheck --> PersistExercise: unique exercise
+    DuplicateCheck --> DuplicateDetected: duplicate exercise
+    PersistExercise --> PostPersistProcessing: classify/graph/search updates
+    PostPersistProcessing --> Logged
+    DuplicateDetected --> Logged: report duplicate
+    Logged --> [*]
+
+    PayloadNormalized --> Rejected: invalid payload
+    PersistExercise --> Rejected: persistence failure
+    PostPersistProcessing --> Rejected: orchestration failure
+    Rejected --> [*]
+```
+
+### Performance Assessment State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> ViewRequested
+    ViewRequested --> FiltersResolved: language/context filters selected
+    FiltersResolved --> MetricsQueried: query metrics service
+    MetricsQueried --> DataAvailable: metrics found
+    MetricsQueried --> EmptyState: no attempts yet
+    DataAvailable --> VisualizationRendered: render UI/CLI visualization
+    VisualizationRendered --> DrillDownRequested: user requests deeper view
+    DrillDownRequested --> FiltersResolved: refine query
+    VisualizationRendered --> Completed
+    EmptyState --> Completed
+    Completed --> [*]
+
+    FiltersResolved --> Failed: invalid filters
+    MetricsQueried --> Failed: query failure
+    Failed --> [*]
+```
+
+## Candidate Implementation Backlog (Hiring Exercise)
+
+Use the issue templates below to create implementation tickets that map 1:1 to the state machines.
+
+| Area | State Machine Reference | Issue Template |
+| --- | --- | --- |
+| Training Session | [Training Session State Machine](#training-session-state-machine) | [.github/ISSUE_TEMPLATE/hiring-training-session-state-machine.md](.github/ISSUE_TEMPLATE/hiring-training-session-state-machine.md) |
+| Logging Session | [Logging Session State Machine](#logging-session-state-machine) | [.github/ISSUE_TEMPLATE/hiring-logging-session-state-machine.md](.github/ISSUE_TEMPLATE/hiring-logging-session-state-machine.md) |
+| Performance Assessment | [Performance Assessment State Machine](#performance-assessment-state-machine) | [.github/ISSUE_TEMPLATE/hiring-performance-assessment-state-machine.md](.github/ISSUE_TEMPLATE/hiring-performance-assessment-state-machine.md) |
 
 # Penrose-Lamarck System Components
 
@@ -244,6 +470,29 @@ Use the same SSH signing key in every local repo.
 Example key:
 
 - `/Users/pereid22/.ssh/gh_roche_ed25519.pub`
+
+## Deterministic DB Mock Seeding
+
+The Postgres container can seed deterministic mock data at runtime.
+
+- Configure it in `src/penroselamarck/db/.env`.
+- `DB_MOCK_DATA=true`: run deterministic seed module after migrations on startup.
+- `DB_MOCK_DATA=false` (default): skip mock seeding.
+
+Example:
+
+```sh
+# edit src/penroselamarck/db/.env and set DB_MOCK_DATA=true
+docker compose up -d --build db api web
+```
+
+## TypeScript SDK
+
+Penrose-Lamarck publishes a TypeScript SDK package:
+
+- package: `@genentech/penroselamarck`
+- registry: `npm.pkg.github.com`
+- source path: `src/penroselamarck/sdk/ts`
 
 Configure one repo:
 

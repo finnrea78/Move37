@@ -35,6 +35,13 @@ from penroselamarck.services.auth_service import Auth0Settings
 router = APIRouter()
 
 
+def _is_truthy_env(name: str) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _normalize_base_url(value: str) -> str:
     """
     _normalize_base_url(value) -> str
@@ -135,6 +142,12 @@ def oauth_protected_resource(request: Request) -> dict:
     >>> callable(oauth_protected_resource)
     True
     """
+    if _is_truthy_env("AUTH_DISABLED"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="OAuth metadata disabled.",
+        )
+
     try:
         settings = Auth0Settings.from_env()
     except ValueError as exc:

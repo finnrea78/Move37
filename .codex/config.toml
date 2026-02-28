@@ -23,8 +23,5 @@ shell_snapshot = true
 [projects."/home/diogo"]
 trust_level = "trusted"
 
-[mcp_servers.penroselamarck-devcontainer]
-url = "http://penroselamarck-api:8080/v1/mcp/sse"
-
 [mcp_servers.penroselamarck-local]
 url = "http://localhost:8080/v1/mcp/sse"
