@@ -59,6 +59,14 @@
   opacity: 0;
 }
 
+.status-ticker {
+  position: absolute;
+  left: 0.68rem;
+  bottom: 0.26rem;
+  z-index: 7;
+  pointer-events: none;
+}
+
 .github-link {
   width: 1.75rem;
   height: 1.75rem;
@@ -122,15 +130,11 @@
 }
 
 .sphere-area.success .sphere-glow {
-  fill: #52ffb5;
-  opacity: 0.82;
-  transition: fill 450ms ease, opacity 500ms ease;
+  transition: opacity 500ms ease;
 }
 
 .sphere-area.failure .sphere-glow {
-  fill: #ff5474;
-  opacity: 0.82;
-  transition: fill 450ms ease, opacity 500ms ease;
+  transition: opacity 500ms ease;
 }
 
 .graph-layer {
@@ -201,7 +205,7 @@
   overflow: auto;
   border-radius: 0.4rem;
   border: 0;
-  background: transparent;
+  background: #09182c99;
   backdrop-filter: none;
   padding: 0.78rem 0.8rem;
   box-shadow: none;
@@ -263,10 +267,10 @@
   display: flex;
   align-items: center;
   gap: 0.36rem;
-  border: 1px solid #8cb4ff2e;
+  border: 0;
   border-radius: 999px;
   background: #0b172c96;
-  box-shadow: 0 0 0 1px #0f264b80 inset;
+  box-shadow: none;
   padding: 0.2rem 0.2rem 0.2rem 0.62rem;
 }
 
@@ -280,11 +284,15 @@
   font: 500 0.76rem/1.2 "IBM Plex Mono", "Courier New", monospace;
 }
 
+.uri-search input::placeholder {
+  color: #6d83a6;
+}
+
 .search-trigger {
   width: 1.9rem;
   height: 1.9rem;
   border-radius: 999px;
-  border: 1px solid #8cb4ff2e;
+  border: 0;
   background: #0b172c96;
   color: #bfeaff;
   display: grid;
@@ -298,31 +306,12 @@
 
 .search-trigger:hover {
   transform: translateY(-1px);
-  border-color: #9fe8ff5f;
   box-shadow: 0 0 16px #6cd7ff45;
 }
 
 .search-trigger svg {
   width: 1.05rem;
   height: 1.05rem;
-}
-
-.footer-attribution {
-  position: absolute;
-  left: 0.68rem;
-  bottom: 0.26rem;
-  margin: 0;
-  z-index: 7;
-  color: #8dd6ff;
-  font: 500 0.62rem/1.15 "IBM Plex Sans", "Avenir Next", sans-serif;
-  letter-spacing: 0.01em;
-  pointer-events: none;
-}
-
-.footer-attribution span {
-  font-size: 0.88rem;
-  line-height: 0;
-  vertical-align: -0.05rem;
 }
 
 @keyframes spherePulse {
@@ -352,14 +341,14 @@
     max-width: 82vw;
   }
 
-  .sphere-area {
-    min-height: 100dvh;
-    height: 100dvh;
-  }
-
-  .footer-attribution {
+  .status-ticker {
     left: 0.56rem;
     bottom: 3.12rem;
     max-width: calc(100vw - 1.2rem);
+  }
+
+  .sphere-area {
+    min-height: 100dvh;
+    height: 100dvh;
   }
 }

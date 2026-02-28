@@ -8,8 +8,13 @@ const GITHUB_MARK_PNG =
 const API_TOKEN = import.meta.env.VITE_PENROSE_API_TOKEN || "web-local-dev";
 
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
-const TOPBAR_MESSAGES = ["Doing now what our patients need next", "F. Hoffman-La Roche AG"];
-const SEARCH_PLACEHOLDER = "input:uri";
+const TOPBAR_MESSAGES = [
+  "Doing now what patients need next",
+  "F. Hoffman-La Roche AG",
+  "gRED / Computational Sciences / DDC Solutions",
+  "https://github.com/Genentech/penrose-lamarck ● 2026",
+];
+const SEARCH_PLACEHOLDER = "search:uid";
 
 const MOCK_EXERCISES = [
   {
@@ -234,7 +239,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(null);
   const [messageIndex, setMessageIndex] = useState(0);
   const [messageVisible, setMessageVisible] = useState(true);
-  const [searchQuery, setSearchQuery] = useState(SEARCH_PLACEHOLDER);
+  const [searchQuery, setSearchQuery] = useState("");
   const [searchState, setSearchState] = useState("idle");
   const [nodesVisible, setNodesVisible] = useState(true);
   const { data: graphData, loading: graphLoading, error: graphError } = useExerciseGraph({
@@ -478,9 +483,6 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           <p className="eyebrow">PENSORE-LAMARCK</p>
-          <p className={`status ${messageVisible ? "visible" : "hidden"}`}>
-            {TOPBAR_MESSAGES[messageIndex]}
-          </p>
         </div>
         <a
           className="github-link"
@@ -493,6 +495,9 @@ export default function App() {
           <img src={GITHUB_MARK_PNG} alt="GitHub" />
         </a>
       </header>
+      <p className={`status status-ticker ${messageVisible ? "visible" : "hidden"}`}>
+        {TOPBAR_MESSAGES[messageIndex]}
+      </p>
 
       <section
         ref={shellRef}
@@ -512,6 +517,18 @@ export default function App() {
               <stop offset="84%" stopColor="#5ca6f5" stopOpacity="0.12" />
               <stop offset="100%" stopColor="#2a4f8f" stopOpacity="0" />
             </radialGradient>
+            <radialGradient id="sphere-halo-success" cx="50%" cy="50%">
+              <stop offset="58%" stopColor="#6bf0b9" stopOpacity="0" />
+              <stop offset="74%" stopColor="#62ffbf" stopOpacity="0.24" />
+              <stop offset="84%" stopColor="#3fd499" stopOpacity="0.16" />
+              <stop offset="100%" stopColor="#1d6f53" stopOpacity="0" />
+            </radialGradient>
+            <radialGradient id="sphere-halo-failure" cx="50%" cy="50%">
+              <stop offset="58%" stopColor="#ff7a94" stopOpacity="0" />
+              <stop offset="74%" stopColor="#ff638a" stopOpacity="0.24" />
+              <stop offset="84%" stopColor="#dd3f68" stopOpacity="0.16" />
+              <stop offset="100%" stopColor="#6e1d36" stopOpacity="0" />
+            </radialGradient>
             <radialGradient id="sphere-vignette" cx="50%" cy="50%">
               <stop offset="0%" stopColor="#00000000" />
               <stop offset="62%" stopColor="#02061100" />
@@ -528,7 +545,13 @@ export default function App() {
             rx={Math.min(size.width, size.height) * 0.41 * zoom}
             ry={Math.min(size.width, size.height) * 0.41 * zoom}
             className="sphere-glow"
-            fill="url(#sphere-halo)"
+            fill={
+              searchState === "success"
+                ? "url(#sphere-halo-success)"
+                : searchState === "failure"
+                  ? "url(#sphere-halo-failure)"
+                  : "url(#sphere-halo)"
+            }
           />
 
           <g className={`graph-layer ${nodesVisible ? "visible" : "hidden"}`}>
@@ -658,6 +681,7 @@ export default function App() {
           <input
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder={SEARCH_PLACEHOLDER}
             aria-label="Search exercise URI"
           />
           <button
@@ -676,9 +700,6 @@ export default function App() {
           </button>
         </div>
       </footer>
-      <p className="footer-attribution">
-        Roche / gRED / Computational Sciences / DDC Solutions <span aria-hidden="true">●</span> 2026
-      </p>
     </main>
   );
 }
