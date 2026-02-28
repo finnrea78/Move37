@@ -173,12 +173,48 @@ def _exercise_rows(seed: int) -> list[dict]:
     True
     """
     base = [
-        {"question": "hej", "answer": "hello", "language": "da", "tags": ["vocab"]},
-        {"question": "tak", "answer": "thanks", "language": "da", "tags": ["vocab"]},
-        {"question": "farvel", "answer": "goodbye", "language": "da", "tags": ["vocab"]},
-        {"question": "hej då", "answer": "goodbye", "language": "sv", "tags": ["vocab"]},
-        {"question": "tack", "answer": "thanks", "language": "sv", "tags": ["vocab"]},
-        {"question": "varsågod", "answer": "you're welcome", "language": "sv", "tags": ["phrase"]},
+        {
+            "question": "hej",
+            "answer": "hello",
+            "language": "da",
+            "tags": ["vocab"],
+            "classes": ["vocabulary"],
+        },
+        {
+            "question": "tak",
+            "answer": "thanks",
+            "language": "da",
+            "tags": ["vocab"],
+            "classes": ["vocabulary"],
+        },
+        {
+            "question": "farvel",
+            "answer": "goodbye",
+            "language": "da",
+            "tags": ["vocab"],
+            "classes": ["vocabulary"],
+        },
+        {
+            "question": "hej då",
+            "answer": "goodbye",
+            "language": "sv",
+            "tags": ["vocab"],
+            "classes": ["vocabulary"],
+        },
+        {
+            "question": "tack",
+            "answer": "thanks",
+            "language": "sv",
+            "tags": ["vocab"],
+            "classes": ["vocabulary"],
+        },
+        {
+            "question": "varsågod",
+            "answer": "you're welcome",
+            "language": "sv",
+            "tags": ["phrase"],
+            "classes": ["phrase"],
+        },
     ]
     rng = random.Random(seed)
     rng.shuffle(base)
@@ -192,6 +228,7 @@ def _exercise_rows(seed: int) -> list[dict]:
             "answer": row["answer"],
             "language": row["language"],
             "tags": row["tags"],
+            "classes": row["classes"],
             "content_hash": _content_hash(row["question"], row["answer"]),
             "created_at": created_at + timedelta(minutes=idx),
         })

@@ -36,7 +36,6 @@ ENV PYTHONPATH=/app
 RUN mkdir -p /docker-entrypoint-initdb.d /app/bin
 
 COPY src/penroselamarck/db/bin/run_with_migrations.sh /app/bin/run_with_migrations.sh
-COPY src/penroselamarck/db/bin/seed.py /app/bin/seed.py
 RUN chmod +x /app/bin/run_with_migrations.sh
 
 # Expose the standard Postgres port

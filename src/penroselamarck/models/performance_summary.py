@@ -1,25 +1,22 @@
 """
-PerformanceSummary ORM model.
+PerformanceSummary model.
 
-Stores aggregated statistics per exercise for quick lookup.
-
-Public API
-----------
-- :class:`PerformanceSummary`: Aggregated stats for exercises.
-
-Attributes
-----------
-None
-
-Examples
+Purpose
 --------
->>> from penroselamarck.models.performance_summary import PerformanceSummary
->>> PerformanceSummary
-<class 'penroselamarck.models.performance_summary.PerformanceSummary'>
 
-See Also
---------
-:class:`penroselamarck.models.exercise.Exercise`
+Stores denormalized per-exercise aggregates used by selection and reporting.
+
+Example
+-------
+{
+  "performance_summary": {
+    "exercise_id": "ex_da_001",
+    "uri": "pluid:performance-summary:4f6a92c87d1140d3",
+    "total_attempts": 12,
+    "pass_rate": 0.83,
+    "last_practiced_at": "2026-02-27T10:02:03Z"
+  }
+}
 """
 
 from __future__ import annotations
@@ -54,9 +51,27 @@ class PerformanceSummary(Base):
         String(64),
         ForeignKey("exercises.id", ondelete="CASCADE"),
         primary_key=True,
+        comment="FK -> exercises.id (and primary key for one summary per exercise).",
     )
-    total_attempts: Mapped[int] = mapped_column(Integer, nullable=False)
-    pass_rate: Mapped[float] = mapped_column(Float, nullable=False)
-    last_practiced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    uri: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+        comment="Stable external resource URI (pluid:performance-summary:<hash>).",
+    )
+    total_attempts: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        comment="Total number of attempts observed for this exercise.",
+    )
+    pass_rate: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+        comment="Aggregate pass ratio for this exercise.",
+    )
+    last_practiced_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+        comment="Timestamp of the latest attempt for this exercise.",
+    )
 
     exercise: Mapped[Exercise] = relationship(back_populates="performance_summary")

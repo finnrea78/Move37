@@ -34,14 +34,6 @@ alembic -c /app/alembic.ini upgrade head || {
     exit 1
 }
 
-# Seed deterministic data (idempotent)
-echo "[wrapper] Seeding deterministic mock data..."
-python3 /app/bin/seed.py || {
-    echo "[wrapper] Seeding failed" >&2
-    kill $PG_PID
-    exit 1
-}
-
 # Attach to Postgres foreground
-echo "[wrapper] Migrations and seeding complete. Attaching to Postgres foreground..."
+echo "[wrapper] Migrations complete. Attaching to Postgres foreground..."
 wait $PG_PID

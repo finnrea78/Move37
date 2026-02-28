@@ -87,11 +87,17 @@ services:
   ##    curl -s -X POST "$MCP_ENDPOINT" \
   ##        -H 'Content-Type: application/json' \
   ##        -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":""auth.login","arguments":{"token":"dev"}}}'
+  ##
+  ## test GITHUB_TOKEN for API calls
+  ##
+  ##    docker compose exec api sh -lc '[ -n "$GITHUB_TOKEN" ] && [ -n "$GITHUB_REPOSITORY" ] && echo ok || echo missing'
+
   api:
     build:
       context: .
       dockerfile: ./src/penroselamarck/api/Dockerfile
     container_name: penroselamarck-api
+    image: ghcr.io/genentech/penrose-lamarck-api:1.0.0
     ports:
       - "8080:8080"
     environment:
@@ -109,8 +115,268 @@ services:
       - AUTH0_JWKS_TIMEOUT_SECONDS=${AUTH0_JWKS_TIMEOUT_SECONDS:-5}
       - MCP_RESOURCE_URL=${MCP_RESOURCE_URL:-}
       - MCP_OAUTH_SCOPES=${MCP_OAUTH_SCOPES:-}
+      - MCP_AUTH_DISABLED=${MCP_AUTH_DISABLED:-false}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-}
+      - GITHUB_BASE_BRANCH=${GITHUB_BASE_BRANCH:-main}
+      - GITHUB_API_URL=${GITHUB_API_URL:-https://api.github.com}
+      - GITHUB_MANIFEST_DIR=${GITHUB_MANIFEST_DIR:-docs/sphinx/src/manifest}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    networks:
+      - penroselamarck
+
+  ### web ##########################################################################
+  ##
+  ## rebuild and start container
+  ##
+  ##    docker compose stop web && docker compose up -d --build web
+  ##
+  ## expose ports
+  ##
+  ##    curl http://penroselamarck-web (devcontainer)
+  ##    curl http://localhost:5173 (host)
+  ##
+  ## debug
+  ##
+  ##    docker compose logs -f web
+  ##    docker compose exec web sh -lc 'ls -la /usr/share/nginx/html'
+  ##
+  ## run
+  ##
+  ##    Open http://localhost:5173 in your browser
+  ##
+  web:
+    build:
+      context: ./src/penroselamarck/web
+      dockerfile: Dockerfile
+    container_name: penroselamarck-web
+    image: ghcr.io/genentech/penrose-lamarck-web:1.0.0
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+    networks:
+      - penroselamarck
+
+  ### orchestrator ###############################################################
+  ##
+  ## rebuild and start container
+  ##
+  ##    docker compose stop orchestrator && docker compose rm -f orchestrator && docker compose up -d --build orchestrator
+  ##
+  ## run in foreground (useful during development)
+  ##
+  ##    docker compose up --build orchestrator
+  ##
+  ## debug
+  ##
+  ##    docker logs -f penroselamarck-orch
+  ##    docker compose exec orchestrator sh -lc 'env | sort | grep -E "DATABASE_URL|ORCHESTRATOR_|OTEL_|LOG_LEVEL"'
+  ##
+  ## metrics/log observability check
+  ##
+  ##    curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[] | .labels.job'
+  ##    curl -s "http://localhost:3100/loki/api/v1/labels" | jq
+  ##
+  ## notes
+  ##
+  ##    - service env file: src/penroselamarck/orchestrator/.env
+  ##    - set ORCHESTRATOR_SEARCH_QUERIES to pre-run semantic searches per cycle
+  ##
+  orchestrator:
+    build:
+      context: .
+      dockerfile: ./src/penroselamarck/orchestrator/Dockerfile
+    container_name: penroselamarck-orch
+    image: ghcr.io/genentech/penrose-lamarck-orchestrator:1.0.0
+    env_file:
+      - ./src/penroselamarck/orchestrator/.env
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${ORCHESTRATOR_LOG_LEVEL:-INFO}
+      - DATABASE_URL=postgresql+psycopg://penroselamarck:penroselamarck@db:5432/penroselamarck
+      - ORCHESTRATOR_LANGUAGE=${ORCHESTRATOR_LANGUAGE:-}
+      - ORCHESTRATOR_CLASSIFY_LIMIT=${ORCHESTRATOR_CLASSIFY_LIMIT:-100}
+      - ORCHESTRATOR_SEARCH_QUERIES=${ORCHESTRATOR_SEARCH_QUERIES:-}
+      - ORCHESTRATOR_SEARCH_LIMIT=${ORCHESTRATOR_SEARCH_LIMIT:-20}
+      - OTEL_ENABLED=${OTEL_ENABLED:-true} # emit OTel telemetry if "true"
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-penroselamarck-orchestrator}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      - OTEL_METRICS_EXPORT_INTERVAL_MS=${OTEL_METRICS_EXPORT_INTERVAL_MS:-5000}
+    depends_on:
+      db:
+        condition: service_healthy
+      otel-collector:
+        condition: service_healthy
+    networks:
+      - penroselamarck
+
+  ### observability ############################################################
+  ##
+  ## architecture
+  ##
+  ##    orchestrator -> otel-collector -> prometheus (metrics)
+  ##                 -> otel-collector -> debug exporter (traces in collector logs)
+  ##    docker logs -> promtail -> loki -> grafana (logs)
+  ##
+  ## service roles
+  ##
+  ##    otel-collector : ingests OTLP telemetry from orchestrator; exposes metrics endpoint for Prometheus
+  ##    prometheus     : scrapes and stores metrics time-series from otel-collector
+  ##    loki           : stores container logs
+  ##    promtail       : tails docker container logs and ships them to loki
+  ##    grafana        : query/visualization UI for Prometheus and Loki data sources
+  ##
+  ## start / stop stack
+  ##
+  ##    docker compose up -d otel-collector prometheus loki promtail grafana
+  ##    docker compose stop otel-collector prometheus loki promtail grafana
+  ##    docker compose rm -f otel-collector prometheus loki promtail grafana
+  ##
+  ## start orchestrator + observability together
+  ##
+  ##    docker compose up -d db otel-collector prometheus loki promtail grafana orchestrator
+  ##
+  ## service status
+  ##
+  ##    docker compose ps otel-collector prometheus loki promtail grafana orchestrator
+  ##
+  ## endpoints
+  ##
+  ##    host:
+  ##      Grafana    http://localhost:3001 (admin/admin)
+  ##      Prometheus http://localhost:9090
+  ##      Loki       http://localhost:3100
+  ##    devcontainer:
+  ##      Grafana    http://penroselamarck-grafana:3000
+  ##      Prometheus http://penroselamarck-prometheus:9090
+  ##      Loki       http://penroselamarck-loki:3100
+  ##
+  ## quick checks (metrics + logs)
+  ##
+  ##    # Loki query (orchestrator logs)
+  ##    curl -s "http://localhost:3100/loki/api/v1/query?query=%7Bcompose_service%3D%22orchestrator%22%7D" | jq
+  ##
+  ##    # Prometheus scrape health
+  ##    curl -s "http://localhost:9090/api/v1/targets" | jq '.data.activeTargets[] | {job: .labels.job, health: .health}'
+  ##
+  ##    # Orchestrator metrics
+  ##    curl -s "http://localhost:9090/api/v1/query?query=penroselamarck_orchestrator_runs_total" | jq
+  ##    curl -s "http://localhost:9090/api/v1/query?query=penroselamarck_orchestrator_exercises_processed_total" | jq
+  ##
+  ##    # Loki labels and recent orchestrator logs
+  ##    curl -s "http://localhost:3100/loki/api/v1/labels" | jq
+  ##    curl -sG "http://localhost:3100/loki/api/v1/query_range" \
+  ##      --data-urlencode 'query={compose_service="orchestrator"}' \
+  ##      --data-urlencode "limit=50" | jq
+  ##
+  ##    # same checks from devcontainer (service DNS names)
+  ##    curl -s "http://penroselamarck-prometheus:9090/api/v1/query?query=penroselamarck_orchestrator_runs_total" | jq
+  ##    curl -s "http://penroselamarck-loki:3100/loki/api/v1/labels" | jq
+  ##
+  ## deep debugging commands
+  ##
+  ##    # follow pipeline logs by stage
+  ##    docker compose logs -f otel-collector
+  ##    docker compose logs -f promtail
+  ##    docker compose logs -f loki
+  ##    docker compose logs -f prometheus
+  ##
+  ##    # verify orchestrator OTEL env at runtime
+  ##    docker compose exec orchestrator sh -lc 'env | grep -E "^OTEL_|^LOG_LEVEL=" | sort'
+  ##
+  ##    # inspect collector exported metrics endpoint directly
+  ##    docker compose exec otel-collector sh -lc 'wget -qO- http://localhost:9464/metrics | head -n 40'
+  ##
+  ##    # inspect promtail discovery labels and positions
+  ##    docker compose exec promtail sh -lc 'cat /tmp/positions.yaml'
+  ##
+  ##    # render and verify compose wiring
+  ##    docker compose config | sed -n "/orchestrator:/,/^[^ ]/p"
+  ##
+  otel-collector:
+    ## receives OTLP from orchestrator and republishes metrics for Prometheus scrape
+    image: otel/opentelemetry-collector-contrib:0.107.0
+    container_name: penroselamarck-otel-collector
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "validate", "--config=/etc/otelcol-contrib/config.yaml"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    volumes:
+      - ${HOST_WORKSPACE}/src/penroselamarck/otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "9464:9464"
+    networks:
+      - penroselamarck
+
+  prometheus:
+    ## pulls metrics from otel-collector and stores time-series
+    image: prom/prometheus:v2.54.1
+    container_name: penroselamarck-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ${HOST_WORKSPACE}/src/penroselamarck/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - penroselamarck-prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - otel-collector
+    networks:
+      - penroselamarck
+
+  loki:
+    ## log storage backend queried by Grafana
+    image: grafana/loki:2.9.10
+    container_name: penroselamarck-loki
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    volumes:
+      - ${HOST_WORKSPACE}/src/penroselamarck/loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
+      - penroselamarck-loki-data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - penroselamarck
+
+  promtail:
+    ## tails docker logs and pushes them to Loki
+    image: grafana/promtail:2.9.10
+    container_name: penroselamarck-promtail
+    command: ["-config.file=/etc/promtail/config.yml"]
+    volumes:
+      - ${HOST_WORKSPACE}/src/penroselamarck/promtail/promtail-config.yaml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+    networks:
+      - penroselamarck
+
+  grafana:
+    ## dashboards and queries over Prometheus/Loki
+    image: grafana/grafana:11.1.4
+    container_name: penroselamarck-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ${HOST_WORKSPACE}/src/penroselamarck/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - penroselamarck-grafana-data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+      - loki
     networks:
       - penroselamarck
 
@@ -168,19 +434,24 @@ services:
   ##
   ##    docker compose down -v db && docker compose up --build db
   ##
-  ## NOTE applies migrations and seeds the relations deterministically
+  ## NOTE applies migrations only; data starts empty by default
   ##
   ## debug
   ##
-  ##    docker logs -f penroselamarck-pg
-  ##    docker exec -it penroselamarck-pg psql -U penroselamarck -d penroselamarck -c "select * from exercises;"
-  ##    penroselamarck-# \dt
+  ##    docker compose logs -f db
+  ##    docker compose exec db psql -U penroselamarck -d penroselamarck -c "select * from exercises limit 20;"
+  ##    docker compose exec db psql -U penroselamarck -d penroselamarck -c "\dt;"
+  ##
+  ## ⚠️ ATTENTION ⚠️
+  ##
+  ## It requires .env file
   ##
   db:
     build:
       context: .
       dockerfile: src/penroselamarck/db/Dockerfile
-    container_name: penroselamarck-pg
+    image: ghcr.io/genentech/penrose-lamarck-pg:1.0.0
+    container_name: penroselamarck-db
     environment:
       - POSTGRES_USER=penroselamarck
       - POSTGRES_PASSWORD=penroselamarck
@@ -251,6 +522,12 @@ volumes:
     name: penroselamarck-db-data
   penroselamarck-marquez-data:
     name: penroselamarck-marquez-data
+  penroselamarck-prometheus-data:
+    name: penroselamarck-prometheus-data
+  penroselamarck-loki-data:
+    name: penroselamarck-loki-data
+  penroselamarck-grafana-data:
+    name: penroselamarck-grafana-data
 
 ## utils ##########################################################################
 ##
