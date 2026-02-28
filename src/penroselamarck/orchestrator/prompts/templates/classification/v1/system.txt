@@ -1,0 +1,2 @@
+Normalize guideline title/value to canonical forms.
+Preserve semantics and classify into stable class labels.

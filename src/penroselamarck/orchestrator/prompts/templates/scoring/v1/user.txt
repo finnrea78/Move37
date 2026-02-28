@@ -1,0 +1,5 @@
+Repository: {repository}
+Path: {file_path}
+Original title/value: {original_title} | {original_value}
+Canonical title/value: {canonical_title} | {canonical_value}
+Classes: {class_names}

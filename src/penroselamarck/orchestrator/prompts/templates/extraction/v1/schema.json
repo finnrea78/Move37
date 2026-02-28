@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {"type": "string"},
+          "value": {"type": "string"},
+          "rationale": {"type": ["string", "null"]},
+          "class_names": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "rationale_type": {"type": ["string", "null"]}
+        },
+        "required": ["title", "value"]
+      }
+    }
+  },
+  "required": ["items"]
+}

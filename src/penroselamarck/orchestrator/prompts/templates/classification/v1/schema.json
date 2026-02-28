@@ -1,0 +1,13 @@
+{
+  "type": "object",
+  "properties": {
+    "canonical_title": {"type": "string"},
+    "canonical_value": {"type": "string"},
+    "value_key": {"type": "string"},
+    "class_names": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  },
+  "required": ["canonical_title", "canonical_value", "value_key", "class_names"]
+}
