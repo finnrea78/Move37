@@ -11,8 +11,9 @@ python tests/mcp/fastmcp_client.py --sse-url http://localhost:8080/v1/mcp/sse
 Include any relevant output snippets, screenshots, or example requests/responses.
 
 Example:
-- `pytest`: 18 passed
-- Manual check: completed session returns no next exercise and cannot accept a new submission
+
+    pytest: 18 passed
+    Manual check: completed session returns no next exercise and cannot accept a new submission
 
 ## Prompt History
 List the key prompts and exploratory questions you used with your coding assistant, in chronological order.
