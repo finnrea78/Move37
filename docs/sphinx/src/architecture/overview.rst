@@ -1,31 +1,34 @@
 Overview
 ========
 
-Penrose-Lamarck is a learning platform designed to preserve human cognitive
-sovereignty in the age of AI. The architecture prioritizes:
+Penrose-Lamarck currently centers on three product workflows:
 
-- Clean separation of domain logic from infrastructure (Clean Architecture).
-- GenAI orchestration with explicit tool boundaries via MCP servers.
-- Retrieval-augmented generation for verifiable reasoning.
-- Continuous evaluation, observability, and governance.
+- exercise ingestion
+- practice sessions
+- performance assessment
 
-Core Principles
----------------
+Those workflows are exposed through two main interfaces:
 
-- **Domain isolation:** The learning domain is framework-agnostic.
-- **Ports and adapters:** All I/O is abstracted by interfaces.
-- **Immutable state:** Domain data is treated as immutable by default.
-- **Safety and traceability:** Every model response is evaluated, traced, and
-  attributable to a source.
+- REST endpoints under ``/v1/*``
+- MCP tools under ``/v1/mcp/sse`` for coding assistants and MCP clients
 
-Container Runtime
------------------
+The repository also includes:
 
-The platform standardizes on **Podman** for containerization:
+- a read-only web UI that visualizes the exercise graph
+- a Postgres-backed persistence layer
+- a lightweight orchestrator that classifies exercises and runs graph/search
+  refresh tasks
+- an observability stack for metrics, traces, and logs
 
-- Daemonless design improves security and auditability.
-- Rootless-first execution aligns with least-privilege standards.
-- Strong OCI compliance and systemd integration fit enterprise operations.
+Implementation Shape
+--------------------
 
-Nerdctl is a strong alternative in containerd-native environments, but Podman
-provides more secure defaults for multi-service developer and CI workloads.
+- FastAPI routers and MCP transport live in ``src/penroselamarck/api``
+- business logic lives in ``src/penroselamarck/services``
+- SQLAlchemy repositories live in ``src/penroselamarck/repositories``
+- ORM models and schemas live in ``src/penroselamarck/models`` and
+  ``src/penroselamarck/schemas``
+- the web UI lives in ``src/penroselamarck/web``
+- orchestration code lives in ``src/penroselamarck/orchestrator``
+
+This is the architecture candidates work against in the hiring exercise.

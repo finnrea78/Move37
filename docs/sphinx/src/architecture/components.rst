@@ -1,38 +1,51 @@
 Core Components
 ===============
 
-Domain Layer
-------------
+Clients
+-------
 
-- **Entities:** Learner profile, learning unit, reasoning trace, mastery state.
-- **Value objects:** Concept, skill level, evidence, learning objective.
-- **Use-cases:** Ingestion, study plan generation, Socratic tutoring, mastery
-  assessment, profile evolution.
+- Web UI in ``src/penroselamarck/web``
+- REST clients calling ``/v1/*``
+- MCP clients (e.g.: Codex CLI) calling ``/v1/mcp/sse``
+- Smoke-test tooling under ``tests/mcp``
 
-Application Layer
+API Layer
+---------
+
+The API layer lives in ``src/penroselamarck/api`` and contains:
+
+- FastAPI server setup
+- REST routers for auth, context, exercise, practice, metrics, and train
+- MCP transport and tool registry
+- dependency wiring for service-container access
+
+Service Layer
+-------------
+
+The service layer lives in ``src/penroselamarck/services`` and owns the core
+application behavior:
+
+- ``ExerciseService`` for creation, listing, classification, graph building,
+  and lightweight semantic search
+- ``TrainService`` for batch exercise import
+- ``PracticeService`` for session lifecycle and answer evaluation
+- ``MetricsService`` for performance aggregation
+- ``AuthService`` and ``ContextService`` for user and study-context behavior
+
+Persistence Layer
 -----------------
 
-- **Service orchestration:** Interactors coordinate workflows.
-- **Policy enforcement:** Evaluation, safety, and governance gates.
-- **State management:** Immutable state transitions and audit trails.
+Persistence is backed by Postgres plus SQLAlchemy models and repositories:
 
-Ports (Interfaces)
-------------------
+- models in ``src/penroselamarck/models``
+- repositories in ``src/penroselamarck/repositories``
+- migrations in ``src/penroselamarck/alembic``
+- runtime DB container in ``src/penroselamarck/db``
 
-- `LLMPort`
-- `RetrieverPort`
-- `VectorStorePort`
-- `GraphStorePort`
-- `DocStorePort`
-- `EvalPort`
-- `FineTunePort`
-- `TelemetryPort`
+Supporting Components
+---------------------
 
-Infrastructure Adapters
------------------------
-
-- **LLM serving:** vLLM or TGI.
-- **Vector DB:** Qdrant or Weaviate.
-- **Graph DB:** Neo4j for concept relationships.
-- **Object storage:** MinIO for raw documents.
-- **Observability:** OpenTelemetry, Grafana, Tempo/Jaeger, Loki.
+- ``src/penroselamarck/orchestrator`` for post-create exercise processing
+- ``src/penroselamarck/sdk/ts`` for the TypeScript SDK used by the web UI
+- ``src/penroselamarck/otel``, ``prometheus``, ``loki``, ``promtail``, and
+  ``grafana`` for observability

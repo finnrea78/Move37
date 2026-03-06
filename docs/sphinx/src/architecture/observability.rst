@@ -1,17 +1,33 @@
 Observability
 =============
 
-Signal Coverage
----------------
+Local Stack
+-----------
 
-- **Tracing:** OpenTelemetry + Tempo/Jaeger.
-- **Metrics:** Prometheus + Grafana.
-- **Logs:** Loki.
-- **LLM Observability:** Langfuse or Helicone.
+The local observability stack is defined in ``compose.yml`` and includes:
 
-Operational Guarantees
-----------------------
+- OpenTelemetry Collector
+- Prometheus
+- Loki
+- Promtail
+- Grafana
 
-- End-to-end traceability from user prompt to tool calls.
-- Metric baselines for latency, cost, and quality.
-- Anomaly detection for retrieval drift and model regressions.
+Data Flow
+---------
+
+The current data flow is:
+
+- orchestrator emits OTLP telemetry to the collector
+- Prometheus scrapes metrics from the collector
+- container logs are tailed by Promtail and shipped to Loki
+- Grafana queries Prometheus and Loki
+
+What It Covers Today
+--------------------
+
+- orchestrator metrics and traces
+- compose-container logs
+- dashboards and ad hoc queries through Grafana
+
+The current observability story is strongest around the orchestrator and local
+container operations rather than full end-to-end product tracing.

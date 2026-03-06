@@ -1,27 +1,29 @@
 # Docs
 
-This repo includes a mature Sphinx documentation project with live-reload via Docker.
+The Sphinx site under `docs/sphinx/src` is the single source of truth for
+Penrose-Lamarck documentation.
 
-## Quick start (Docker Compose)
+Published docs: https://genentech.github.io/penrose-lamarck/
+
+## Local preview
 
 ```bash
-docker compose up --build
+docker compose up --build docs
 ```
 
 - Browse: http://localhost:8000
 - Edit sources in `docs/sphinx/src`
-  - Architecture pages under `docs/sphinx/src/architecture`
 
-Stop the server:
+Stop the preview server:
 
 ```bash
 docker compose down
 ```
 
-## Static build (optional)
+## Static build
 
 ```bash
 docker compose run --rm docs sphinx-build /docs/src /docs/build/html
 ```
 
-Output is generated in `docs/sphinx/build/html`.
+Generated output is written to `docs/sphinx/build/html`.

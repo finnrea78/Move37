@@ -1,36 +1,39 @@
-GenAI Orchestration
-===================
+Orchestration And MCP
+=====================
 
-LangGraph Workflow
-------------------
-
-LangGraph coordinates multi-step workflows with explicit state transitions:
-
-1. Ingest source content.
-2. Chunk and embed documents.
-3. Index into vector and graph stores.
-4. Retrieve evidence for a query.
-5. Generate structured reasoning traces.
-6. Evaluate and score the output.
-
-MCP Tooling
+MCP Surface
 -----------
 
-All external tools are exposed through Model Context Protocol (MCP) servers.
-This enforces strict tool boundaries and improves auditability.
+Penrose-Lamarck exposes its assistant-facing functionality through MCP at
+``/v1/mcp/sse``. The MCP tool registry maps tool calls onto the same service
+layer used by the REST API.
 
-Recommended MCP services:
+The current tool set includes operations such as:
 
-- `mcp-llm`: model gateway and routing.
-- `mcp-retrieval`: hybrid search and re-ranking.
-- `mcp-docs`: ingestion and document validation.
-- `mcp-tools`: bioinformatics, code execution, math.
+- authentication and study context
+- exercise creation, listing, graph, search, and classification
+- bulk import
+- practice session start, next, submit, and end
+- performance metrics
 
-Agent Protocol
---------------
+Current Orchestrator Role
+-------------------------
 
-Agents follow a shared protocol:
+The orchestrator in ``src/penroselamarck/orchestrator`` is currently
+exercise-focused rather than a general agent platform. Its runtime behavior is
+centered on:
 
-- Explicit tool calls with typed inputs/outputs.
-- Observable state transitions.
-- Safety and policy checks at each step.
+- classifying exercises that do not yet have classes
+- optionally running predefined semantic-search queries
+- emitting observability metrics and traces
+
+Search And Graph Processing
+---------------------------
+
+Graph construction and semantic search currently happen inside
+``ExerciseService`` using repository-backed data:
+
+- graph edges are built from shared tags and classes
+- semantic search uses normalized token overlap
+- class inference uses lightweight heuristics when explicit classes are absent
+
