@@ -50,8 +50,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ${HOST_WORKSPACE}/docs/sphinx/src:/docs/src
-      - ${HOST_WORKSPACE}/docs/sphinx/build:/docs/build
+      - ./docs/sphinx/src:/docs/src
+      - ./docs/sphinx/build:/docs/build
     command: sphinx-autobuild /docs/src /docs/build/html --host 0.0.0.0 --port 8000
     environment:
       - PYTHONDONTWRITEBYTECODE=1
