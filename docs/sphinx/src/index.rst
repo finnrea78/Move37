@@ -13,7 +13,6 @@ and observability. The full API surface is intended to be accessed through an au
    :titlesonly:
    :hidden:
 
-   philosophy
    getting-started
    candidate-exercise
    architecture/main
