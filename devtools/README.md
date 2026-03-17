@@ -21,3 +21,16 @@ export GITHUB_TOKEN="$(gh auth token)"
 docker compose run --rm devtools doctor
 docker compose run --rm devtools bootstrap plan
 ```
+
+Deployment environment helpers wrap the CDK app in `src/move37/infra/eks`:
+
+```bash
+docker compose run --rm devtools infra doctor
+docker compose run --rm devtools infra deps
+docker compose run --rm devtools infra bootstrap
+docker compose run --rm devtools infra synth eks
+docker compose run --rm devtools infra diff oidc
+docker compose run --rm devtools infra deploy access
+```
+
+For `infra *` commands, pass AWS credentials through environment variables or mount `~/.aws`.

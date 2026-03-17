@@ -83,6 +83,9 @@ Typical commands:
 devtools/bin/mv37-devtools doctor
 devtools/bin/mv37-devtools repo plan
 devtools/bin/mv37-devtools repo apply
+devtools/bin/mv37-devtools infra doctor
+devtools/bin/mv37-devtools infra bootstrap
+devtools/bin/mv37-devtools infra deploy eks
 ```
 
 Requirements:
@@ -90,8 +93,9 @@ Requirements:
 - Docker on the host
 - `gh` on the host
 - successful `gh auth`
+- AWS credentials for `infra *` commands, either via env vars or `~/.aws`
 
-The wrapper uses your host `gh auth token` and runs the actual tooling inside a container.
+The wrapper uses your host `gh auth token` for repo/bootstrap commands and passes AWS environment through for infra commands before running the actual tooling inside a container.
 
 ## What contributors usually need to know
 

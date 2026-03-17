@@ -400,6 +400,7 @@ services:
   ##
   ##    - this service is profile-gated and is not started by `docker compose up`
   ##    - authenticate on the host with `gh auth login`, then pass `GITHUB_TOKEN`
+  ##    - mount host AWS config or pass AWS env vars before running `infra *` commands
   ##    - the repo is bind-mounted at `/workspace` so `.env` files and configs are visible
   ##
   devtools:
@@ -410,8 +411,22 @@ services:
     environment:
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - MV37_DEVTOOLS_DEFAULT_CONFIG=${MV37_DEVTOOLS_DEFAULT_CONFIG:-devtools/config/move37.repo.toml}
+      - AWS_PROFILE=${AWS_PROFILE:-}
+      - AWS_REGION=${AWS_REGION:-}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-}
+      - AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID:-}
+      - CDK_DEFAULT_ACCOUNT=${CDK_DEFAULT_ACCOUNT:-}
+      - CDK_DEFAULT_REGION=${CDK_DEFAULT_REGION:-}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
+      - AWS_ROLE_ARN=${AWS_ROLE_ARN:-}
+      - AWS_WEB_IDENTITY_TOKEN_FILE=${AWS_WEB_IDENTITY_TOKEN_FILE:-}
+      - MOVE37_DEPLOY_ENV=${MOVE37_DEPLOY_ENV:-}
+      - MOVE37_DEPLOY_BRANCH=${MOVE37_DEPLOY_BRANCH:-}
     volumes:
       - .:/workspace
+      - ${HOME}/.aws:/root/.aws:ro
     working_dir: /workspace
     networks:
       - move37

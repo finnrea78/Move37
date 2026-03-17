@@ -12,14 +12,25 @@ import typer
 from .apply import apply_plan
 from .config_schema import load_config, resolve_env_bindings
 from .github_client import GitHubClient, GitHubAPIError
+from .infra import (
+    InfraStackTarget,
+    bootstrap_aws_environment,
+    collect_infra_doctor_report,
+    deploy_stack,
+    diff_stack,
+    install_infra_dependencies,
+    synth_stack,
+)
 from .planner import build_plan, fetch_live_state, render_plan
 
 
 app = typer.Typer(help="Move37 repository bootstrap tooling.", no_args_is_help=True)
 repo_app = typer.Typer(help="Plan or apply repo bootstrap changes.", no_args_is_help=True)
 bootstrap_app = typer.Typer(help="Aliases for the default Move37 repo config.", no_args_is_help=True)
+infra_app = typer.Typer(help="AWS/CDK deployment environment helpers.", no_args_is_help=True)
 app.add_typer(repo_app, name="repo")
 app.add_typer(bootstrap_app, name="bootstrap")
+app.add_typer(infra_app, name="infra")
 
 
 def _default_config_path() -> Path:
@@ -217,6 +228,90 @@ def bootstrap_apply(
         config_path=_default_config_path(),
         repo_root=repo_root.resolve(),
         prune_labels=prune_labels,
+    )
+
+
+@infra_app.command("doctor")
+def infra_doctor(
+    repo_root: Path = typer.Option(Path("."), "--repo-root", help="Repository root."),
+) -> None:
+    """Validate local AWS/CDK deployment prerequisites."""
+
+    report = collect_infra_doctor_report(repo_root.resolve())
+    typer.echo("Infra doctor")
+    typer.echo("Checks:")
+    for check in report.checks:
+        typer.echo(f"  - {check}")
+    if report.warnings:
+        typer.echo("Warnings:")
+        for warning in report.warnings:
+            typer.echo(f"  - {warning}")
+    if report.errors:
+        typer.echo("Errors:", err=True)
+        for error in report.errors:
+            typer.echo(f"  - {error}", err=True)
+        raise typer.Exit(code=1)
+
+
+@infra_app.command("deps")
+def infra_deps(
+    repo_root: Path = typer.Option(Path("."), "--repo-root", help="Repository root."),
+) -> None:
+    """Install CDK app dependencies."""
+
+    install_infra_dependencies(repo_root.resolve())
+
+
+@infra_app.command("bootstrap")
+def infra_bootstrap(
+    repo_root: Path = typer.Option(Path("."), "--repo-root", help="Repository root."),
+    extra_args: list[str] = typer.Argument(None, help="Additional arguments passed to `cdk bootstrap`."),
+) -> None:
+    """Bootstrap the AWS environment for CDK deployments."""
+
+    bootstrap_aws_environment(repo_root.resolve(), extra_args=extra_args or None)
+
+
+@infra_app.command("synth")
+def infra_synth(
+    target: InfraStackTarget = typer.Argument(..., help="CDK stack target."),
+    repo_root: Path = typer.Option(Path("."), "--repo-root", help="Repository root."),
+    extra_args: list[str] = typer.Argument(None, help="Additional arguments passed to `cdk synth`."),
+) -> None:
+    """Run `cdk synth` for a stack target."""
+
+    synth_stack(repo_root.resolve(), target, extra_args=extra_args or None)
+
+
+@infra_app.command("diff")
+def infra_diff(
+    target: InfraStackTarget = typer.Argument(..., help="CDK stack target."),
+    repo_root: Path = typer.Option(Path("."), "--repo-root", help="Repository root."),
+    extra_args: list[str] = typer.Argument(None, help="Additional arguments passed to `cdk diff`."),
+) -> None:
+    """Run `cdk diff` for a stack target."""
+
+    diff_stack(repo_root.resolve(), target, extra_args=extra_args or None)
+
+
+@infra_app.command("deploy")
+def infra_deploy(
+    target: InfraStackTarget = typer.Argument(..., help="CDK stack target."),
+    repo_root: Path = typer.Option(Path("."), "--repo-root", help="Repository root."),
+    require_approval: str = typer.Option(
+        "never",
+        "--require-approval",
+        help="Value passed through to `cdk deploy --require-approval`.",
+    ),
+    extra_args: list[str] = typer.Argument(None, help="Additional arguments passed to `cdk deploy`."),
+) -> None:
+    """Run `cdk deploy` for a stack target."""
+
+    deploy_stack(
+        repo_root.resolve(),
+        target,
+        extra_args=extra_args or None,
+        require_approval=require_approval,
     )
 
 
