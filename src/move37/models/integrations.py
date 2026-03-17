@@ -39,6 +39,35 @@ class CalendarConnectionModel(TimestampMixin, Base):
     sync_token: Mapped[str | None] = mapped_column(String(255))
 
 
+class CalendarEventLinkModel(TimestampMixin, Base):
+    """Persisted mapping between Move37 activities and external calendar events."""
+
+    __tablename__ = "calendar_event_links"
+    __table_args__ = (
+        UniqueConstraint(
+            "provider",
+            "owner_subject",
+            "activity_id",
+            name="uq_calendar_event_links_provider_subject_activity",
+        ),
+        UniqueConstraint(
+            "provider",
+            "owner_subject",
+            "external_event_id",
+            name="uq_calendar_event_links_provider_subject_event",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    owner_subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    activity_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    external_calendar_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    external_event_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    managed_by_move37: Mapped[bool] = mapped_column(nullable=False, default=True)
+    last_seen_etag: Mapped[str | None] = mapped_column(String(255))
+
+
 class BankAccountConnectionModel(TimestampMixin, Base):
     """Persisted Open Banking-linked bank account metadata."""
 

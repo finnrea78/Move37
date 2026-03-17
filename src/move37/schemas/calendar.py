@@ -12,13 +12,18 @@ class CalendarEvent(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    id: str | None = None
+    calendar_id: str | None = None
+    calendar_name: str | None = None
     title: str = Field(min_length=1)
     starts_at: datetime
     ends_at: datetime
+    all_day: bool = False
     description: str | None = None
     location: str | None = None
     attendees: tuple[str, ...] = ()
     metadata: dict[str, str] = Field(default_factory=dict)
+    etag: str | None = None
 
 
 class CalendarEventUpdate(BaseModel):
@@ -29,6 +34,7 @@ class CalendarEventUpdate(BaseModel):
     title: str | None = None
     starts_at: datetime | None = None
     ends_at: datetime | None = None
+    all_day: bool | None = None
     description: str | None = None
     location: str | None = None
     attendees: tuple[str, ...] | None = None

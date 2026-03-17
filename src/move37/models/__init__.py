@@ -11,6 +11,7 @@ from .chat import ChatMessageModel, ChatSessionModel
 from .integrations import (
     BankAccountConnectionModel,
     CalendarConnectionModel,
+    CalendarEventLinkModel,
     GitHubIntegrationModel,
 )
 from .note import NoteEmbeddingJobModel, NoteModel
@@ -25,6 +26,7 @@ __all__ = [
     "ChatMessageModel",
     "ChatSessionModel",
     "CalendarConnectionModel",
+    "CalendarEventLinkModel",
     "GitHubIntegrationModel",
     "NoteEmbeddingJobModel",
     "NoteModel",
