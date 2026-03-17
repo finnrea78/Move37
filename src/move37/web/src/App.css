@@ -253,6 +253,34 @@
   pointer-events: auto;
 }
 
+.dock-import {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.42rem;
+}
+
+.dock-import-actions {
+  position: absolute;
+  right: calc(100% + 0.55rem);
+  top: 50%;
+  transform: translateY(-50%) scale(0.96);
+  display: grid;
+  gap: 0.42rem;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.dock-import.expanded .dock-import-actions {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(-50%) scale(1);
+}
+
 .dock-button {
   width: 2.1rem;
   height: 2.1rem;
@@ -296,6 +324,38 @@
   min-width: 3.05rem;
   padding: 0 0.6rem;
   font-size: 0.68rem;
+}
+
+.dock-subaction {
+  min-width: 5.7rem;
+  height: 2.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.38rem;
+  border: 1px solid #8cb4ff2e;
+  background: #0b172ce6;
+  color: #d9ebff;
+  border-radius: 999px;
+  cursor: pointer;
+  font: 700 0.66rem/1 "IBM Plex Mono", "Courier New", monospace;
+  transition:
+    transform 180ms ease,
+    box-shadow 220ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+
+.dock-subaction:hover {
+  transform: translateY(-1px);
+  border-color: #9fe8ff5f;
+  background: #102244f0;
+  box-shadow: 0 0 18px #6cd7ff22;
+}
+
+.dock-subaction svg {
+  width: 0.95rem;
+  height: 0.95rem;
 }
 
 .sphere-shell {
@@ -635,6 +695,92 @@
   box-shadow: 0 18px 54px #00081da8;
 }
 
+.notes-overlay {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 12;
+  width: 50vw;
+  height: 100dvh;
+  background: rgb(4 11 24 / 80%);
+  border-right: 1px solid #8cb4ff1f;
+  backdrop-filter: blur(6px);
+}
+
+.notes-overlay-form {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0.8rem;
+  padding: 0.9rem 0.92rem 0.85rem;
+}
+
+.notes-overlay-toolbar,
+.url-import-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.48rem;
+}
+
+.overlay-icon-button {
+  width: 2.1rem;
+  height: 2.1rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid #8cb4ff30;
+  background: #0b172cd4;
+  color: #d9ebff;
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    transform 180ms ease,
+    box-shadow 220ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+
+.overlay-icon-button:hover {
+  transform: translateY(-1px);
+  border-color: #9fe8ff5f;
+  background: #102244ee;
+  box-shadow: 0 0 18px #6cd7ff22;
+}
+
+.overlay-icon-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+  box-shadow: none;
+}
+
+.overlay-icon-button svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.notes-editor {
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  color: #eef6ff;
+  padding: 0.2rem 0;
+  font: 500 0.95rem/1.6 "IBM Plex Sans", "Avenir Next", sans-serif;
+}
+
+.notes-editor::placeholder {
+  color: #7f98bc;
+}
+
+.notes-overlay-status {
+  margin: 0;
+  color: #9fb9db;
+  font: 700 0.68rem/1 "IBM Plex Mono", "Courier New", monospace;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .workspace-header {
   display: flex;
   align-items: flex-start;
@@ -750,6 +896,56 @@
   min-height: 6rem;
 }
 
+.url-import-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 16;
+  display: grid;
+  place-items: center;
+  background: rgb(1 6 16 / 24%);
+}
+
+.url-import-popup {
+  width: min(28rem, calc(100vw - 1.6rem));
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid #8cb4ff24;
+  background: #09182cf0;
+  border-radius: 0.48rem;
+  padding: 0.82rem;
+  box-shadow: 0 18px 54px #00081da8;
+}
+
+.url-import-field {
+  display: grid;
+  gap: 0.38rem;
+  margin: 0;
+  color: #d5e5ff;
+  font: 500 0.82rem/1.35 "IBM Plex Sans", "Avenir Next", sans-serif;
+}
+
+.url-import-field input {
+  width: 100%;
+  border: 1px solid #8ec8ff1f;
+  border-radius: 0.42rem;
+  background: #102040bf;
+  color: #e8f2ff;
+  padding: 0.62rem;
+  outline: 0;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .details-header {
   display: flex;
   align-items: flex-start;
@@ -832,44 +1028,57 @@ button.chip {
   font-family: "IBM Plex Mono", "Courier New", monospace !important;
 }
 
-.bottombar {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 1.15rem;
-  z-index: 9;
-  display: flex;
-  justify-content: center;
-  padding: 0.36rem 0.68rem 0.56rem;
-  pointer-events: none;
-}
-
 .uri-search {
-  pointer-events: auto;
-  width: min(44rem, calc(100vw - 1.3rem));
+  position: relative;
+  width: 2.1rem;
   display: flex;
   align-items: center;
-  gap: 0.36rem;
-  border-radius: 999px;
-  background: #0b172c96;
-  padding: 0.2rem 0.2rem 0.2rem 0.62rem;
 }
 
-.uri-search input {
-  flex: 1;
-  min-width: 0;
+.uri-search.collapsed {
+  width: 2.1rem;
+}
+
+.uri-search-panel {
+  position: absolute;
+  left: calc(100% + 0.42rem);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  overflow: hidden;
+  opacity: 0;
+  border-radius: 999px;
+  background: #0b172cb5;
+  border: 1px solid #8cb4ff2e;
+  box-shadow: 0 0 18px #00091a18;
+  transition:
+    width 180ms ease,
+    opacity 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+.uri-search.expanded .uri-search-panel {
+  width: min(22rem, calc(100vw - 6.8rem - min(calc(50% + min(28vw, 14rem)), calc(100vw - 3.8rem))));
+  opacity: 1;
+  border-color: #9fe8ff5f;
+  box-shadow: 0 0 24px #6cd7ff18;
+}
+
+.uri-search-panel input {
+  width: 100%;
   border: 0;
   outline: 0;
   background: transparent;
   color: #d9ebff;
+  padding: 0.58rem 0.82rem;
   font: 500 0.76rem/1.2 "IBM Plex Mono", "Courier New", monospace;
 }
 
-.uri-search input::placeholder {
+.uri-search-panel input::placeholder {
   color: #6d83a6;
 }
 
-.search-trigger,
 .action-button {
   min-width: 1.9rem;
   height: 1.9rem;
@@ -1146,6 +1355,18 @@ button.chip {
     transform: none;
   }
 
+  .dock-import-actions {
+    right: auto;
+    left: 50%;
+    top: auto;
+    bottom: calc(100% + 0.5rem);
+    transform: translateX(-50%) scale(0.96);
+  }
+
+  .dock-import.expanded .dock-import-actions {
+    transform: translateX(-50%) scale(1);
+  }
+
   .field-row,
   .metric-grid {
     grid-template-columns: 1fr;
@@ -1171,11 +1392,15 @@ button.chip {
     max-height: min(52vh, calc(100vh - 8rem));
   }
 
-  .bottombar {
-    bottom: 1.55rem;
+  .notes-overlay {
+    width: 100vw;
   }
 
-  .uri-search {
+  .url-import-popup {
     width: calc(100vw - 1.3rem);
+  }
+
+  .uri-search.expanded .uri-search-panel {
+    width: min(16rem, calc(100vw - 5rem));
   }
 }

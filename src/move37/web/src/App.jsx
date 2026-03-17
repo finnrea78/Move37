@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useActivityGraph, useChatSession, useNotes } from "@move37/sdk/react";
 import "./App.css";
-import { DEFAULT_GRAPH } from "./mockData";
 import {
   buildIndexes,
   collectAncestors,
@@ -22,6 +21,7 @@ const TOPBAR_MESSAGES = [
   "right click nodes to edit the network",
 ];
 const SEARCH_PLACEHOLDER = "search:activity";
+const EMPTY_GRAPH = { nodes: [], dependencies: [], schedules: [] };
 
 function getLevelNoise(level, sessionSeed) {
   const base = Math.sin(sessionSeed * 97.13 + level * 53.71) * 43758.5453;
@@ -486,6 +486,56 @@ function ChatIcon() {
   );
 }
 
+function SaveIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 4.8h11.7L19 7.1v12.1H5z" className="icon-map-outline" />
+      <path d="M8 4.8v5.3h7.2V4.8" className="icon-map-line" />
+      <path d="M8.4 15.1h7.2" className="icon-map-line" />
+    </svg>
+  );
+}
+
+function ExitIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7 7l10 10" className="icon-map-line" />
+      <path d="M17 7L7 17" className="icon-map-line" />
+    </svg>
+  );
+}
+
+function ImportIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 4.8v9.8" className="icon-map-line" />
+      <path d="M8.3 10.9L12 14.6l3.7-3.7" className="icon-map-line" />
+      <path d="M5 18.2h14" className="icon-map-outline" />
+    </svg>
+  );
+}
+
+function LinkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M9.2 14.8l-1.8 1.8a3.1 3.1 0 0 1-4.4-4.4l3-3a3.1 3.1 0 0 1 4.4 0" className="icon-map-line" />
+      <path d="M14.8 9.2l1.8-1.8a3.1 3.1 0 1 1 4.4 4.4l-3 3a3.1 3.1 0 0 1-4.4 0" className="icon-map-line" />
+      <path d="M9.1 14.9l5.8-5.8" className="icon-map-line" />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M10.5 3.5a7 7 0 1 0 4.24 12.58l4.84 4.84a1 1 0 1 0 1.42-1.42l-4.84-4.84A7 7 0 0 0 10.5 3.5Zm0 2a5 5 0 1 1 0 10a5 5 0 0 1 0-10Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
 function cloneGraph(graph) {
   return JSON.parse(JSON.stringify(graph));
 }
@@ -522,10 +572,24 @@ function defaultForm(node) {
   };
 }
 
-function defaultNoteForm(note) {
+function serializeNoteForEditor(note) {
+  if (!note) {
+    return "";
+  }
+  return note.body ? `${note.title}\n${note.body}` : note.title || "";
+}
+
+function parseNoteDraft(value) {
+  const newlineIndex = value.indexOf("\n");
+  if (newlineIndex === -1) {
+    return {
+      title: value.trim(),
+      body: "",
+    };
+  }
   return {
-    title: note?.title || "",
-    body: note?.body || "",
+    title: value.slice(0, newlineIndex).trim(),
+    body: value.slice(newlineIndex + 1),
   };
 }
 
@@ -880,6 +944,10 @@ function buildLevelShells(maxLevel, sessionSeed = 0) {
 
 export default function App() {
   const shellRef = useRef(null);
+  const searchInputRef = useRef(null);
+  const urlInputRef = useRef(null);
+  const browseInputRef = useRef(null);
+  const dockRef = useRef(null);
   const dragRef = useRef({ active: false, mode: null, x: 0, y: 0, angle: 0 });
   const transitionTimersRef = useRef([]);
   const modeMorphFrameRef = useRef(0);
@@ -908,9 +976,9 @@ export default function App() {
     updateActivity,
   } = useActivityGraph(apiOptions);
   const {
-    notes,
     createNote,
     getNote,
+    importNoteFromUrl,
     importTxtNotes,
     updateNote,
   } = useNotes(apiOptions);
@@ -921,7 +989,7 @@ export default function App() {
     sendMessage,
     loading: chatLoading,
   } = useChatSession(apiOptions);
-  const [graph, setGraph] = useState(() => sanitizeGraph(DEFAULT_GRAPH));
+  const [graph, setGraph] = useState(() => sanitizeGraph(EMPTY_GRAPH));
   const [transition, setTransition] = useState(null);
   const [viewMode, setViewMode] = useState("3d");
   const [modeMorph, setModeMorph] = useState(null);
@@ -938,17 +1006,20 @@ export default function App() {
   const [messageIndex, setMessageIndex] = useState(0);
   const [messageVisible, setMessageVisible] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [searchState, setSearchState] = useState("idle");
   const [nodesVisible, setNodesVisible] = useState(true);
   const [contextMenu, setContextMenu] = useState(null);
   const [sheet, setSheet] = useState(null);
   const [form, setForm] = useState(defaultForm(null));
   const [leftPanel, setLeftPanel] = useState(null);
-  const [notesTab, setNotesTab] = useState("write");
-  const [noteForm, setNoteForm] = useState(defaultNoteForm(null));
+  const [noteDraft, setNoteDraft] = useState("");
   const [activeNote, setActiveNote] = useState(null);
   const [draftNoteNodeId, setDraftNoteNodeId] = useState(null);
-  const [importFiles, setImportFiles] = useState([]);
+  const [isImportMenuExpanded, setIsImportMenuExpanded] = useState(false);
+  const [importPopoverMode, setImportPopoverMode] = useState(null);
+  const [urlImportValue, setUrlImportValue] = useState("");
+  const [urlImportLoading, setUrlImportLoading] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [error, setError] = useState("");
   const [now, setNow] = useState(() => Date.now());
@@ -1133,6 +1204,74 @@ export default function App() {
     const timer = window.setTimeout(() => setError(""), 4500);
     return () => window.clearTimeout(timer);
   }, [error]);
+
+  useEffect(() => {
+    if (!isSearchExpanded) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [isSearchExpanded]);
+
+  useEffect(() => {
+    if (importPopoverMode !== "url") {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      urlInputRef.current?.focus();
+      urlInputRef.current?.select();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [importPopoverMode]);
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      if (importPopoverMode === "url") {
+        event.preventDefault();
+        setImportPopoverMode(null);
+        setUrlImportValue("");
+        setUrlImportLoading(false);
+        setIsImportMenuExpanded(false);
+        return;
+      }
+      if (document.activeElement === searchInputRef.current && isSearchExpanded) {
+        event.preventDefault();
+        setIsSearchExpanded(false);
+        return;
+      }
+      if (leftPanel === "note-editor") {
+        event.preventDefault();
+        closeLeftPanel();
+        return;
+      }
+      if (isImportMenuExpanded) {
+        event.preventDefault();
+        setIsImportMenuExpanded(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [importPopoverMode, isImportMenuExpanded, isSearchExpanded, leftPanel]);
+
+  useEffect(() => {
+    if (!isImportMenuExpanded) {
+      return undefined;
+    }
+    const onPointerDown = (event) => {
+      if (dockRef.current?.contains(event.target)) {
+        return;
+      }
+      setIsImportMenuExpanded(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [isImportMenuExpanded]);
 
   const layout = useMemo(() => computeGraphLayout(graph), [graph]);
 
@@ -1632,6 +1771,39 @@ export default function App() {
     setSearchState("idle");
   }
 
+  function handleSearchTrigger() {
+    if (!isSearchExpanded) {
+      setIsSearchExpanded(true);
+      return;
+    }
+    void runSearch();
+  }
+
+  function toggleImportMenu() {
+    setImportPopoverMode(null);
+    setIsImportMenuExpanded((value) => !value);
+  }
+
+  function openUrlImportPopover() {
+    setImportPopoverMode("url");
+    setIsImportMenuExpanded(false);
+  }
+
+  function triggerBrowseImport() {
+    setIsImportMenuExpanded(false);
+    browseInputRef.current?.click();
+  }
+
+  function handleBrowseInputChange(event) {
+    const files = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (!files.length) {
+      setIsImportMenuExpanded(false);
+      return;
+    }
+    void importSelectedFiles(files);
+  }
+
   function openSheet(nextSheet, nextForm = defaultForm(null)) {
     if (isTransitioning) {
       return;
@@ -1901,9 +2073,10 @@ export default function App() {
     setContextMenu(null);
     setSelectedId(null);
     setActiveNote(null);
-    setNotesTab("write");
-    setNoteForm(defaultNoteForm(null));
-    setLeftPanel("notes");
+    setNoteDraft("");
+    setLeftPanel("note-editor");
+    setImportPopoverMode(null);
+    setIsImportMenuExpanded(false);
     if (!draftNoteNodeId) {
       const nodeId = `draft-note-${Date.now()}`;
       setDraftNoteNodeId(nodeId);
@@ -1930,7 +2103,6 @@ export default function App() {
         }),
       );
     }
-    focusPanel();
   }
 
   async function openExistingNote(noteId) {
@@ -1939,11 +2111,11 @@ export default function App() {
       setContextMenu(null);
       const note = await getNote(noteId);
       setActiveNote(note);
-      setNoteForm(defaultNoteForm(note));
-      setNotesTab("write");
-      setLeftPanel("notes");
+      setNoteDraft(serializeNoteForEditor(note));
+      setLeftPanel("note-editor");
+      setImportPopoverMode(null);
+      setIsImportMenuExpanded(false);
       setSelectedId(note.linkedActivityId || null);
-      focusPanel();
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     }
@@ -1953,17 +2125,14 @@ export default function App() {
     removeDraftNoteNode();
     setLeftPanel(null);
     setActiveNote(null);
-    setImportFiles([]);
+    setNoteDraft("");
     setChatInput("");
     recenterView();
   }
 
   async function submitNote(event) {
     event.preventDefault();
-    const payload = {
-      title: noteForm.title.trim(),
-      body: noteForm.body,
-    };
+    const payload = parseNoteDraft(noteDraft);
     if (!payload.title) {
       setError("Note title is required.");
       return;
@@ -2009,7 +2178,7 @@ export default function App() {
         );
         setLeftPanel(null);
         setActiveNote(null);
-        setImportFiles([]);
+        setNoteDraft("");
         setChatInput("");
         recenterView();
       }
@@ -2018,23 +2187,44 @@ export default function App() {
     }
   }
 
-  async function submitImport(event) {
-    event.preventDefault();
-    if (!importFiles.length) {
-      setError("Choose at least one .txt file to import.");
+  async function importSelectedFiles(files) {
+    if (!files.length) {
       return;
     }
     try {
       const formData = new FormData();
-      importFiles.forEach((file) => {
+      files.forEach((file) => {
         formData.append("files", file);
       });
       const response = await importTxtNotes(formData);
       setGraph(sanitizeGraph(response.graph));
       await reloadGraph();
-      closeLeftPanel();
+      setIsImportMenuExpanded(false);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
+      setIsImportMenuExpanded(false);
+    }
+  }
+
+  async function submitUrlImport(event) {
+    event.preventDefault();
+    const url = urlImportValue.trim();
+    if (!url) {
+      setError("Enter a URL to import.");
+      return;
+    }
+    setUrlImportLoading(true);
+    try {
+      const response = await importNoteFromUrl({ url });
+      setGraph(sanitizeGraph(response.graph));
+      await reloadGraph();
+      setImportPopoverMode(null);
+      setUrlImportValue("");
+      setIsImportMenuExpanded(false);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setUrlImportLoading(false);
     }
   }
 
@@ -2413,14 +2603,53 @@ export default function App() {
   }
 
   return (
-    <main className="app-shell" onClick={() => setContextMenu(null)}>
+    <main
+      className="app-shell"
+      onClick={() => {
+        setContextMenu(null);
+        setIsImportMenuExpanded(false);
+      }}
+    >
       <header className="topbar">
         <div className="brand">
           <p className="eyebrow">MOVE37</p>
         </div>
       </header>
 
-      <aside className="control-dock" aria-label="View controls">
+      <aside
+        ref={dockRef}
+        className={`control-dock ${isImportMenuExpanded ? "expanded" : ""}`}
+        aria-label="View controls"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className={`uri-search ${isSearchExpanded ? "expanded" : "collapsed"}`}>
+          <button
+            type="button"
+            className="dock-button search-trigger"
+            onClick={handleSearchTrigger}
+            aria-label="Search activity"
+            title="Search activity"
+          >
+            <SearchIcon />
+          </button>
+          <div className="uri-search-panel">
+            {isSearchExpanded ? (
+              <input
+                ref={searchInputRef}
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void runSearch();
+                  }
+                }}
+                placeholder={SEARCH_PLACEHOLDER}
+                aria-label="Search activity"
+              />
+            ) : null}
+          </div>
+        </div>
         <button
           type="button"
           className="dock-button"
@@ -2432,9 +2661,9 @@ export default function App() {
         </button>
         <button
           type="button"
-          className={`dock-button ${leftPanel === "notes" ? "active" : ""}`}
+          className={`dock-button ${leftPanel === "note-editor" ? "active" : ""}`}
           onClick={() => {
-            if (leftPanel === "notes") {
+            if (leftPanel === "note-editor") {
               closeLeftPanel();
               return;
             }
@@ -2448,6 +2677,45 @@ export default function App() {
         >
           <NotesIcon />
         </button>
+        <div className={`dock-import ${isImportMenuExpanded ? "expanded" : ""}`}>
+          <button
+            type="button"
+            className={`dock-button ${isImportMenuExpanded || importPopoverMode === "url" ? "active" : ""}`}
+            onClick={toggleImportMenu}
+            aria-label="Open note import controls"
+            title="Import notes"
+          >
+            <ImportIcon />
+          </button>
+          <div className="dock-import-actions" aria-hidden={!isImportMenuExpanded}>
+            <button
+              type="button"
+              className="dock-subaction"
+              onClick={triggerBrowseImport}
+              title="Browse .txt files"
+            >
+              <ImportIcon />
+              <span>Browse</span>
+            </button>
+            <button
+              type="button"
+              className="dock-subaction"
+              onClick={openUrlImportPopover}
+              title="Import from URL"
+            >
+              <LinkIcon />
+              <span>URL</span>
+            </button>
+          </div>
+          <input
+            ref={browseInputRef}
+            type="file"
+            accept=".txt,text/plain"
+            multiple
+            className="visually-hidden"
+            onChange={handleBrowseInputChange}
+          />
+        </div>
         <button
           type="button"
           className={`dock-button ${leftPanel === "chat" ? "active" : ""}`}
@@ -2456,6 +2724,8 @@ export default function App() {
               closeLeftPanel();
               return;
             }
+            setImportPopoverMode(null);
+            setIsImportMenuExpanded(false);
             closeLeftPanel();
             setLeftPanel("chat");
             focusPanel();
@@ -2498,99 +2768,25 @@ export default function App() {
       {graphLoading && !canonicalGraph && <div className="banner">Loading graph from api...</div>}
       {error && <div className="banner">{error}</div>}
 
-      {leftPanel === "notes" && (
-        <aside className="workspace-panel" onClick={(event) => event.stopPropagation()}>
-          <div className="workspace-header">
-            <div>
-              <div className="workspace-tabs">
-                <button
-                  type="button"
-                  className={`workspace-tab ${notesTab === "write" ? "active" : ""}`}
-                  onClick={() => setNotesTab("write")}
-                >
-                  Write
-                </button>
-                <button
-                  type="button"
-                  className={`workspace-tab ${notesTab === "import" ? "active" : ""}`}
-                  onClick={() => setNotesTab("import")}
-                >
-                  Import
-                </button>
-              </div>
-              <p className="small">{notes.length} notes available</p>
+      {leftPanel === "note-editor" && (
+        <aside className="notes-overlay" onClick={(event) => event.stopPropagation()}>
+          <form className="notes-overlay-form" onSubmit={submitNote}>
+            <div className="notes-overlay-toolbar">
+              <button type="submit" className="overlay-icon-button" aria-label="Save note" title="Save note">
+                <SaveIcon />
+              </button>
+              <button type="button" className="overlay-icon-button" onClick={closeLeftPanel} aria-label="Exit note editor" title="Exit note editor">
+                <ExitIcon />
+              </button>
             </div>
-            <button type="button" className="ghost-button" onClick={closeLeftPanel}>
-              CLOSE
-            </button>
-          </div>
-          {notesTab === "write" ? (
-            <form className="workspace-form" onSubmit={submitNote}>
-              <label>
-                Title
-                <input
-                  value={noteForm.title}
-                  onChange={(event) => setNoteForm((current) => ({ ...current, title: event.target.value }))}
-                  placeholder="What is this note about?"
-                />
-              </label>
-              <label className="workspace-grow">
-                Body
-                <textarea
-                  value={noteForm.body}
-                  onChange={(event) => setNoteForm((current) => ({ ...current, body: event.target.value }))}
-                  placeholder="Capture the note in full."
-                />
-              </label>
-              {activeNote ? (
-                <p className="small">
-                  Indexed status: <strong>{activeNote.ingestStatus}</strong>
-                </p>
-              ) : (
-                <p className="small">Saving will enqueue embeddings and create a note node.</p>
-              )}
-              <div className="sheet-actions">
-                <button type="button" className="ghost-button" onClick={closeLeftPanel}>
-                  Cancel
-                </button>
-                <button type="submit" className="ghost-button">
-                  Save note
-                </button>
-              </div>
-            </form>
-          ) : (
-            <form className="workspace-form" onSubmit={submitImport}>
-              <label>
-                Import `.txt` files
-                <input
-                  type="file"
-                  accept=".txt,text/plain"
-                  multiple
-                  onChange={(event) => setImportFiles(Array.from(event.target.files || []))}
-                />
-              </label>
-              <div className="import-list">
-                {importFiles.length ? (
-                  importFiles.map((file) => (
-                    <div key={`${file.name}-${file.size}`} className="import-item">
-                      <strong>{file.name}</strong>
-                      <span>{Math.max(1, Math.round(file.size / 1024))} KB</span>
-                    </div>
-                  ))
-                ) : (
-                  <p className="small">Choose one or more UTF-8 or UTF-16 `.txt` files.</p>
-                )}
-              </div>
-              <div className="sheet-actions">
-                <button type="button" className="ghost-button" onClick={closeLeftPanel}>
-                  Cancel
-                </button>
-                <button type="submit" className="ghost-button">
-                  Import notes
-                </button>
-              </div>
-            </form>
-          )}
+            <textarea
+              className="notes-editor"
+              autoFocus
+              value={noteDraft}
+              onChange={(event) => setNoteDraft(event.target.value)}
+              placeholder={`Title on the first line\n\nWrite the rest of the note below.`}
+            />
+          </form>
         </aside>
       )}
 
@@ -2646,6 +2842,57 @@ export default function App() {
             </div>
           </form>
         </aside>
+      )}
+
+      {importPopoverMode === "url" && (
+        <div className="url-import-backdrop" onClick={() => {
+          setImportPopoverMode(null);
+          setUrlImportValue("");
+          setUrlImportLoading(false);
+          setIsImportMenuExpanded(false);
+        }}>
+          <form
+            className="url-import-popup"
+            onClick={(event) => event.stopPropagation()}
+            onSubmit={submitUrlImport}
+          >
+            <div className="url-import-toolbar">
+              <button
+                type="submit"
+                className="overlay-icon-button"
+                aria-label="Import note from URL"
+                title="Import note from URL"
+                disabled={urlImportLoading}
+              >
+                <ImportIcon />
+              </button>
+              <button
+                type="button"
+                className="overlay-icon-button"
+                onClick={() => {
+                  setImportPopoverMode(null);
+                  setUrlImportValue("");
+                  setUrlImportLoading(false);
+                  setIsImportMenuExpanded(false);
+                }}
+                aria-label="Close URL import"
+                title="Close URL import"
+              >
+                <ExitIcon />
+              </button>
+            </div>
+            <label className="url-import-field">
+              <span>URL</span>
+              <input
+                ref={urlInputRef}
+                type="url"
+                value={urlImportValue}
+                onChange={(event) => setUrlImportValue(event.target.value)}
+                placeholder="https://example.com/note.txt"
+              />
+            </label>
+          </form>
+        </div>
       )}
 
       <section
@@ -3603,36 +3850,6 @@ export default function App() {
         </div>
       )}
 
-      <footer className="bottombar">
-        <div className="uri-search">
-          <input
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                runSearch();
-              }
-            }}
-            placeholder={SEARCH_PLACEHOLDER}
-            aria-label="Search activity"
-          />
-          <button
-            type="button"
-            className="search-trigger"
-            onClick={runSearch}
-            aria-label="Search activity"
-            title="Search activity"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M10.5 3.5a7 7 0 1 0 4.24 12.58l4.84 4.84a1 1 0 1 0 1.42-1.42l-4.84-4.84A7 7 0 0 0 10.5 3.5Zm0 2a5 5 0 1 1 0 10a5 5 0 0 1 0-10Z"
-                fill="currentColor"
-              />
-            </svg>
-          </button>
-        </div>
-      </footer>
     </main>
   );
 }
