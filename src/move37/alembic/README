@@ -1,0 +1,4 @@
+Move37 Alembic migrations.
+
+The Dockerized Postgres service is responsible for running `alembic upgrade head`
+at container startup. New revisions should be added under `move37/alembic/versions`.

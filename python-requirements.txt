@@ -1,3 +1,0 @@
--r tests/python-requirements.txt
--r src/penroselamarck/python-requirements.txt
--r docs/requirements.txt

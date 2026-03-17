@@ -1,2 +1,0 @@
-Extract explicit engineering guidelines from repository text.
-Return only concrete, actionable guideline items.

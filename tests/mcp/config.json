@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "penroselamarck": {
-      "type": "sse",
-      "url": "http://penroselamarck-api:8080/v1/mcp/sse"
-    }
-  }
-}

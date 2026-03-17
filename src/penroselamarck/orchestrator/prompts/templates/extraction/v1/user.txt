@@ -1,8 +1,0 @@
-Repository: {repository}
-File: {file_path}
-
-Extract explicit software engineering guideline statements from this file.
-Ignore marketing text, changelog entries, and unrelated prose.
-
-File content:
-{file_text}

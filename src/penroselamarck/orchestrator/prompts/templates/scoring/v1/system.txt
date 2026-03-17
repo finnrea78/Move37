@@ -1,3 +1,0 @@
-Score extraction quality.
-confidence_score measures canonical mapping confidence.
-score measures guideline strength and clarity in this repository context.

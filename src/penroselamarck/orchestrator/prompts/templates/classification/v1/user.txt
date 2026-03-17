@@ -1,6 +1,0 @@
-Repository: {repository}
-Path: {file_path}
-Title: {title}
-Value: {value}
-Rationale: {rationale}
-Existing classes: {existing_classes}
