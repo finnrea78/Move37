@@ -67,4 +67,32 @@ describe("Move37Client", () => {
       }),
     );
   });
+
+  it("requests Apple Calendar events with range params", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ events: [] }),
+    }));
+    const client = new Move37Client({
+      baseUrl: "http://localhost:8080",
+      token: "token-123",
+      fetchImpl,
+    });
+
+    await client.listAppleCalendarEvents({
+      start: "2026-03-17T00:00:00Z",
+      end: "2026-03-24T00:00:00Z",
+    });
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "http://localhost:8080/v1/calendars/apple/events?start=2026-03-17T00%3A00%3A00Z&end=2026-03-24T00%3A00%3A00Z",
+      expect.objectContaining({
+        method: "GET",
+        headers: expect.objectContaining({
+          Authorization: "Bearer token-123",
+        }),
+      }),
+    );
+  });
 });

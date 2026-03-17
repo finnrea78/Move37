@@ -39,6 +39,20 @@ export class Move37Client {
     return this.request("GET", "/v1/graph");
   }
 
+  getAppleCalendarStatus() {
+    return this.request("GET", "/v1/calendars/apple/status");
+  }
+
+  listAppleCalendarEvents({ start, end }) {
+    return this.request("GET", "/v1/calendars/apple/events", {
+      query: { start, end },
+    });
+  }
+
+  reconcileAppleCalendar() {
+    return this.request("POST", "/v1/calendars/apple/reconcile");
+  }
+
   createActivity(payload) {
     this.logOperation("createActivity", { title: payload?.title, parentIds: payload?.parentIds });
     return this.request("POST", "/v1/activities", { body: payload });
