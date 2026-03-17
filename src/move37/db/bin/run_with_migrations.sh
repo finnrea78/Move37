@@ -7,6 +7,14 @@ if [ ! -x "$ORIG_ENTRYPOINT" ]; then
     exit 1
 fi
 
+DB_ENV_FILE="/app/move37/db/.env"
+if [ -f "$DB_ENV_FILE" ]; then
+    echo "[wrapper] Loading local DB env from $DB_ENV_FILE"
+    set -a
+    . "$DB_ENV_FILE"
+    set +a
+fi
+
 "$ORIG_ENTRYPOINT" postgres &
 PG_PID=$!
 
@@ -31,6 +39,15 @@ alembic -c /app/alembic.ini upgrade head || {
     kill $PG_PID
     exit 1
 }
+
+if [ "${MOVE37_DB_SEED_MOCK_DATA:-false}" = "true" ]; then
+    echo "[wrapper] Seeding local mock data..."
+    python3 /app/move37/db/seed_mock_data.py || {
+        echo "[wrapper] Mock data seeding failed" >&2
+        kill $PG_PID
+        exit 1
+    }
+fi
 
 echo "[wrapper] Migrations complete. Attaching to Postgres foreground..."
 wait $PG_PID

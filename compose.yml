@@ -65,6 +65,7 @@ services:
     ports:
       - "${MOVE37_POSTGRES_HOST_PORT:-55432}:5432"
     volumes:
+      - ./src/move37/db:/app/move37/db:ro
       - move37-db-data:/var/lib/postgresql/data
     networks:
       - move37
@@ -549,7 +550,7 @@ services:
       - move37
 
   promtail:
-    image: grafana/promtail:2.9.10
+    image: grafana/promtail:3.0.0
     container_name: move37-promtail
     command: ["-config.file=/etc/promtail/config.yml"]
     volumes:
@@ -569,6 +570,8 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - ./src/move37/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./src/move37/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./src/move37/grafana/dashboards:/etc/grafana/dashboards:ro
       - move37-grafana-data:/var/lib/grafana
     ports:
       - "3001:3000"

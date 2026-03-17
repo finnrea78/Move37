@@ -1,0 +1,567 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "target": {
+          "limit": 100,
+          "matchAny": false,
+          "tags": [],
+          "type": "dashboard"
+        },
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "grafana",
+        "uid": "-- Grafana --"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "content": "# Move37 Container Logs\nUse the links below like tabs. Each link reopens this dashboard with a service filter applied.\n\n**Core**\n[All](/d/move37-container-logs/move37-container-logs?orgId=1&var-compose_service=All&var-container=All&var-stream=All) | [api](/d/move37-container-logs/move37-container-logs?orgId=1&var-compose_service=api&var-container=All&var-stream=All) | [web](/d/move37-container-logs/move37-container-logs?orgId=1&var-compose_service=web&var-container=All&var-stream=All) | [move37-ai](/d/move37-container-logs/move37-container-logs?orgId=1&var-compose_service=move37-ai&var-container=All&var-stream=All) | [move37-notes-worker](/d/move37-container-logs/move37-container-logs?orgId=1&var-compose_service=move37-notes-worker&var-container=All&var-stream=All) | [db](/d/move37-container-logs/move37-container-logs?orgId=1&var-compose_service=db&var-container=All&var-stream=All) | [devtools](/d/move37-container-logs/move37-container-logs?orgId=1&var-compose_service=devtools&var-container=All&var-stream=All) | [fern-docs](/d/move37-container-logs/move37-container-logs?orgId=1&var-compose_service=fern-docs&var-container=All&var-stream=All)\n\n**Langfuse**\n[langfuse-web](/d/move37-container-logs/move37-container-logs?orgId=1&var-compose_service=langfuse-web&var-container=All&var-stream=All) | [langfuse-worker](/d/move37-container-logs/move37-container-logs?orgId=1&var-compose_service=langfuse-worker&var-container=All&var-stream=All) | [langfuse-postgres](/d/move37-container-logs/move37-container-logs?orgId=1&var-compose_service=langfuse-postgres&var-container=All&var-stream=All) | [langfuse-redis](/d/move37-container-logs/move37-container-logs?orgId=1&var-compose_service=langfuse-redis&var-container=All&var-stream=All) | [langfuse-clickhouse](/d/move37-container-logs/move37-container-logs?orgId=1&var-compose_service=langfuse-clickhouse&var-container=All&var-stream=All)\n\n**Milvus**\n[milvus-standalone](/d/move37-container-logs/move37-container-logs?orgId=1&var-compose_service=milvus-standalone&var-container=All&var-stream=All) | [milvus-etcd](/d/move37-container-logs/move37-container-logs?orgId=1&var-compose_service=milvus-etcd&var-container=All&var-stream=All) | [milvus-minio](/d/move37-container-logs/move37-container-logs?orgId=1&var-compose_service=milvus-minio&var-container=All&var-stream=All)\n\n**Observability**\n[otel-collector](/d/move37-container-logs/move37-container-logs?orgId=1&var-compose_service=otel-collector&var-container=All&var-stream=All) | [prometheus](/d/move37-container-logs/move37-container-logs?orgId=1&var-compose_service=prometheus&var-container=All&var-stream=All) | [loki](/d/move37-container-logs/move37-container-logs?orgId=1&var-compose_service=loki&var-container=All&var-stream=All) | [promtail](/d/move37-container-logs/move37-container-logs?orgId=1&var-compose_service=promtail&var-container=All&var-stream=All) | [grafana](/d/move37-container-logs/move37-container-logs?orgId=1&var-compose_service=grafana&var-container=All&var-stream=All)\n\nUse the variables above the dashboard to narrow further to a specific container or stream.",
+        "mode": "markdown"
+      },
+      "pluginVersion": "11.1.4",
+      "title": "Service Tabs",
+      "transparent": true,
+      "type": "text"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 8
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "pluginVersion": "11.1.4",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "count(sum by (container) (count_over_time({compose_project=\"move37\", compose_service=~\"${compose_service:regex}\", container=~\"${container:regex}\", stream=~\"${stream:regex}\"}[$__range])))",
+          "legendFormat": "containers",
+          "queryType": "instant",
+          "refId": "A"
+        }
+      ],
+      "title": "Containers Active In Range",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "pluginVersion": "11.1.4",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(count_over_time({compose_project=\"move37\", compose_service=~\"${compose_service:regex}\", container=~\"${container:regex}\", stream=~\"${stream:regex}\"} |~ \"(?i)(error|exception|fatal|panic|traceback)\"[$__range]))",
+          "legendFormat": "errors",
+          "queryType": "instant",
+          "refId": "A"
+        }
+      ],
+      "title": "Error Lines In Range",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "options": {
+        "displayMode": "basic",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": false,
+        "text": {}
+      },
+      "pluginVersion": "11.1.4",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum by (compose_service) (count_over_time({compose_project=\"move37\", compose_service=~\"${compose_service:regex}\", container=~\"${container:regex}\", stream=~\"${stream:regex}\"}[$__range]))",
+          "legendFormat": "{{compose_service}}",
+          "queryType": "instant",
+          "refId": "A"
+        }
+      ],
+      "title": "Lines By Service",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 14,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 3,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "11.1.4",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum by (compose_service) (count_over_time({compose_project=\"move37\", compose_service=~\"${compose_service:regex}\", container=~\"${container:regex}\", stream=~\"${stream:regex}\"}[$__interval]))",
+          "legendFormat": "{{compose_service}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Log Lines Over Time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineStyle": {
+              "fill": "solid"
+            },
+            "lineWidth": 2,
+            "pointSize": 3,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "11.1.4",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum by (compose_service) (count_over_time({compose_project=\"move37\", compose_service=~\"${compose_service:regex}\", container=~\"${container:regex}\", stream=~\"${stream:regex}\"} |~ \"(?i)(error|exception|fatal|panic|traceback)\"[$__interval]))",
+          "legendFormat": "{{compose_service}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Error Lines Over Time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "id": 7,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "pluginVersion": "11.1.4",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "{compose_project=\"move37\", compose_service=~\"${compose_service:regex}\", container=~\"${container:regex}\", stream=~\"${stream:regex}\"}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Recent Container Logs",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "id": 8,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "pluginVersion": "11.1.4",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "{compose_project=\"move37\", compose_service=~\"${compose_service:regex}\", container=~\"${container:regex}\", stream=~\"${stream:regex}\"} |~ \"(?i)(error|exception|fatal|panic|traceback)\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Errors And Exceptions",
+      "type": "logs"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": [
+    "move37",
+    "docker",
+    "logs"
+  ],
+  "templating": {
+    "list": [
+      {
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "loki",
+          "uid": "loki"
+        },
+        "definition": "label_values({compose_project=\"move37\"}, compose_service)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Service",
+        "multi": false,
+        "name": "compose_service",
+        "options": [],
+        "query": {
+          "query": "label_values({compose_project=\"move37\"}, compose_service)",
+          "refId": "ComposeServiceVariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "loki",
+          "uid": "loki"
+        },
+        "definition": "label_values({compose_project=\"move37\", compose_service=~\"${compose_service:regex}\"}, container)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Container",
+        "multi": true,
+        "name": "container",
+        "options": [],
+        "query": {
+          "query": "label_values({compose_project=\"move37\", compose_service=~\"${compose_service:regex}\"}, container)",
+          "refId": "ContainerVariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "hide": 0,
+        "includeAll": true,
+        "label": "Stream",
+        "multi": false,
+        "name": "stream",
+        "options": [],
+        "query": "stdout,stderr",
+        "type": "custom"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Move37 Container Logs",
+  "uid": "move37-container-logs",
+  "version": 1,
+  "weekStart": ""
+}

@@ -11,7 +11,7 @@ RUN apk add --no-cache python3 py3-pip build-base postgresql-dev
 
 WORKDIR /app
 
-COPY src/move37/db/python-requirements.txt ./move37/db/python-requirements.txt
+COPY src/move37/db ./move37/db
 RUN python3 -m pip install --upgrade pip --break-system-packages \
  && pip install --no-cache-dir --break-system-packages -r ./move37/db/python-requirements.txt \
  && rm -rf /root/.cache/pip
@@ -32,7 +32,7 @@ ENV PYTHONPATH=/app
 RUN mkdir -p /docker-entrypoint-initdb.d /app/bin
 COPY src/move37/db/initdb.d/ /docker-entrypoint-initdb.d/
 COPY src/move37/db/bin/run_with_migrations.sh /app/bin/run_with_migrations.sh
-RUN chmod +x /app/bin/run_with_migrations.sh
+RUN chmod +x /app/bin/run_with_migrations.sh /app/move37/db/bin/run_with_migrations.sh
 
 EXPOSE 5432
 
