@@ -24,10 +24,13 @@ body {
   margin: 0;
   min-width: 320px;
   overflow: hidden;
+  background: #050814;
 }
 
 button,
 a,
-input {
+input,
+textarea,
+select {
   font: inherit;
 }

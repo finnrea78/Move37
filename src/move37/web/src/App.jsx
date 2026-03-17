@@ -1,0 +1,3638 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useActivityGraph, useChatSession, useNotes } from "@move37/sdk/react";
+import "./App.css";
+import { DEFAULT_GRAPH } from "./mockData";
+import {
+  buildIndexes,
+  collectAncestors,
+  collectDescendants,
+  computeGraphLayout,
+  createNodeId,
+  deriveScheduleEdges,
+  fibonacciSphere,
+  formatHours,
+  rotateX,
+  rotateY,
+  wouldCreateCycle,
+} from "./graph";
+
+const TOPBAR_MESSAGES = [
+  "human operating system for the AI age",
+  "graph is now backed by the move37 api",
+  "right click nodes to edit the network",
+];
+const SEARCH_PLACEHOLDER = "search:activity";
+
+function getLevelNoise(level, sessionSeed) {
+  const base = Math.sin(sessionSeed * 97.13 + level * 53.71) * 43758.5453;
+  return base - Math.floor(base);
+}
+
+function getLevelShellStyle(level, maxLevel, sessionSeed = 0) {
+  const ratio = maxLevel <= 0 ? 0 : level / maxLevel;
+  const noise = getLevelNoise(level, sessionSeed);
+  const hue = 198 + noise * 12;
+  const saturation = 52 + noise * 18;
+  const lightness = 38 + ratio * 10 + noise * 14;
+  const alpha = 0.018 + noise * 0.05;
+  return {
+    fill: `hsla(${hue}, ${saturation}%, ${Math.max(16, lightness - 24)}%, ${alpha})`,
+    glow: `hsla(${hue}, ${Math.max(44, saturation - 8)}%, ${lightness}%, ${0.05 + noise * 0.12})`,
+  };
+}
+
+function getLevelPalette(level, maxLevel, sessionSeed = 0) {
+  const ratio = maxLevel <= 0 ? 1 : level / maxLevel;
+  const noise = getLevelNoise(level, sessionSeed);
+  const hue = 204 + noise * 10 - ratio * 8;
+  const saturation = 42 + noise * 24;
+  const fillLightness = 24 + noise * 18 + ratio * 20;
+  const strokeLightness = 42 + noise * 16 + ratio * 16;
+  const haloLightness = 36 + noise * 18 + ratio * 18;
+  const edgeLightness = 36 + noise * 18 + ratio * 20;
+  const scheduleHue = 166 + noise * 14;
+  return {
+    nodeFill: `hsl(${hue}, ${saturation}%, ${fillLightness}%)`,
+    nodeStroke: `hsl(${hue - 3}, ${Math.max(40, saturation - 8)}%, ${strokeLightness}%)`,
+    nodeHaloFill: `hsla(${hue - 4}, ${Math.max(36, saturation - 10)}%, ${haloLightness}%, ${0.12 + noise * 0.08})`,
+    nodeLabelFill: `hsl(${hue - 1}, ${Math.max(34, saturation - 12)}%, ${Math.min(88, fillLightness + 18)}%)`,
+    edgeStroke: `hsla(${hue - 2}, ${Math.max(34, saturation - 10)}%, ${edgeLightness}%, ${0.72 + noise * 0.16})`,
+    edgeScheduleStroke: `hsla(${scheduleHue}, ${54 + ratio * 26}%, ${50 + ratio * 26}%, 0.94)`,
+  };
+}
+
+function getLevelVisualStyle(level, maxLevel, sessionSeed = 0) {
+  const palette = getLevelPalette(level, maxLevel, sessionSeed);
+  return {
+    "--node-fill": palette.nodeFill,
+    "--node-stroke": palette.nodeStroke,
+    "--node-halo-fill": palette.nodeHaloFill,
+    "--node-label-fill": palette.nodeLabelFill,
+    "--edge-stroke": palette.edgeStroke,
+    "--edge-schedule-stroke": palette.edgeScheduleStroke,
+  };
+}
+
+function getNodeRenderRadius(node) {
+  return 3.1 + Math.max(0, node.level) * 1.25 + node.depth * 0.9;
+}
+
+function interpolateProjectedGraphs(fromProjected, toProjected, nodes, progress) {
+  const byId = {};
+  const ordered = nodes
+    .map((node) => {
+      const from = fromProjected.byId[node.id];
+      const to = toProjected.byId[node.id];
+      if (!from || !to) {
+        return null;
+      }
+      const projectedNode = {
+        ...node,
+        x: from.x + (to.x - from.x) * progress,
+        y: from.y + (to.y - from.y) * progress,
+        z: from.z + (to.z - from.z) * progress,
+        depth: from.depth + (to.depth - from.depth) * progress,
+        angle: from.angle + (to.angle - from.angle) * progress,
+        radialRatio: from.radialRatio + (to.radialRatio - from.radialRatio) * progress,
+      };
+      byId[node.id] = projectedNode;
+      return projectedNode;
+    })
+    .filter(Boolean);
+
+  ordered.sort((left, right) => left.z - right.z);
+
+  return {
+    byId,
+    ordered,
+    centerX: fromProjected.centerX + (toProjected.centerX - fromProjected.centerX) * progress,
+    centerY: fromProjected.centerY + (toProjected.centerY - fromProjected.centerY) * progress,
+    radius: fromProjected.radius + (toProjected.radius - fromProjected.radius) * progress,
+  };
+}
+
+function buildPinchedEdgePath(from, to, fromWidth, toWidth, midWidth) {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.hypot(dx, dy) || 1;
+  const perpX = -dy / length;
+  const perpY = dx / length;
+  const midX = (from.x + to.x) / 2;
+  const midY = (from.y + to.y) / 2;
+  const fromLeftX = from.x + perpX * fromWidth;
+  const fromLeftY = from.y + perpY * fromWidth;
+  const fromRightX = from.x - perpX * fromWidth;
+  const fromRightY = from.y - perpY * fromWidth;
+  const midLeftX = midX + perpX * midWidth;
+  const midLeftY = midY + perpY * midWidth;
+  const midRightX = midX - perpX * midWidth;
+  const midRightY = midY - perpY * midWidth;
+  const toLeftX = to.x + perpX * toWidth;
+  const toLeftY = to.y + perpY * toWidth;
+  const toRightX = to.x - perpX * toWidth;
+  const toRightY = to.y - perpY * toWidth;
+  return `M ${fromLeftX} ${fromLeftY} L ${midLeftX} ${midLeftY} L ${toLeftX} ${toLeftY} L ${toRightX} ${toRightY} L ${midRightX} ${midRightY} L ${fromRightX} ${fromRightY} Z`;
+}
+
+function buildAmbientTreeFlow(graph, layout) {
+  if (!graph.nodes.length) {
+    return { dependencyEdgeIds: new Set() };
+  }
+
+  const maxLevel = Math.max(0, ...graph.nodes.map((node) => layout.finalLevels.get(node.id) || 0));
+  const outerCandidates = graph.nodes.filter(
+    (node) => (layout.finalLevels.get(node.id) || 0) === maxLevel,
+  );
+  const outerPool = outerCandidates.length ? outerCandidates : graph.nodes;
+  const outerNode = outerPool[Math.floor(Math.random() * outerPool.length)] || null;
+  if (!outerNode) {
+    return { dependencyEdgeIds: new Set() };
+  }
+
+  const ancestorIds = collectAncestors(outerNode.id, layout.parentMap);
+  const nodeIds = new Set([outerNode.id, ...ancestorIds]);
+  const dependencyEdgeIds = new Set();
+
+  graph.dependencies.forEach((edge) => {
+    if (nodeIds.has(edge.parentId) && nodeIds.has(edge.childId)) {
+      dependencyEdgeIds.add(getDependencyEdgeId(edge));
+    }
+  });
+
+  return {
+    dependencyEdgeIds,
+  };
+}
+
+function buildLevelScheduleOrder(levelNodeIds, schedules, nodeOrder) {
+  const levelSet = new Set(levelNodeIds);
+  const adjacency = new Map();
+  const indegree = new Map();
+
+  schedules.forEach((rule) => {
+    if (!levelSet.has(rule.earlierId) || !levelSet.has(rule.laterId)) {
+      return;
+    }
+    if (!adjacency.has(rule.earlierId)) {
+      adjacency.set(rule.earlierId, []);
+      indegree.set(rule.earlierId, 0);
+    }
+    if (!adjacency.has(rule.laterId)) {
+      adjacency.set(rule.laterId, []);
+      indegree.set(rule.laterId, 0);
+    }
+    adjacency.get(rule.earlierId).push(rule.laterId);
+    indegree.set(rule.laterId, indegree.get(rule.laterId) + 1);
+  });
+
+  const scheduledIds = [...adjacency.keys()];
+  if (!scheduledIds.length) {
+    return { scheduledIds: [], scheduledSet: new Set() };
+  }
+
+  const queue = scheduledIds
+    .filter((id) => indegree.get(id) === 0)
+    .sort((left, right) => nodeOrder.get(left) - nodeOrder.get(right));
+  const ordered = [];
+
+  while (queue.length) {
+    const id = queue.shift();
+    ordered.push(id);
+    (adjacency.get(id) || []).forEach((nextId) => {
+      indegree.set(nextId, indegree.get(nextId) - 1);
+      if (indegree.get(nextId) === 0) {
+        queue.push(nextId);
+        queue.sort((left, right) => nodeOrder.get(left) - nodeOrder.get(right));
+      }
+    });
+  }
+
+  if (ordered.length !== scheduledIds.length) {
+    throw new Error("Scheduling cycle detected on level.");
+  }
+
+  return { scheduledIds: ordered, scheduledSet: new Set(scheduledIds) };
+}
+
+function buildLevelClusters(levelNodeIds, parentMap, nodeOrder, scheduledIds) {
+  const parentBuckets = new Map();
+
+  levelNodeIds.forEach((id) => {
+    const parents = parentMap.get(id) || [];
+    parents.forEach((parentId) => {
+      if (!parentBuckets.has(parentId)) {
+        parentBuckets.set(parentId, []);
+      }
+      parentBuckets.get(parentId).push(id);
+    });
+  });
+
+  const roots = new Map(levelNodeIds.map((id) => [id, id]));
+
+  function find(id) {
+    const parent = roots.get(id);
+    if (parent === id) {
+      return id;
+    }
+    const root = find(parent);
+    roots.set(id, root);
+    return root;
+  }
+
+  function union(left, right) {
+    const leftRoot = find(left);
+    const rightRoot = find(right);
+    if (leftRoot !== rightRoot) {
+      roots.set(rightRoot, leftRoot);
+    }
+  }
+
+  [...parentBuckets.values()].forEach((bucket) => {
+    if (!Array.isArray(bucket) || bucket.length < 2) {
+      return;
+    }
+    const [first, ...rest] = bucket;
+    rest.forEach((id) => union(first, id));
+  });
+
+  const grouped = new Map();
+  levelNodeIds.forEach((id) => {
+    const root = find(id);
+    if (!grouped.has(root)) {
+      grouped.set(root, []);
+    }
+    grouped.get(root).push(id);
+  });
+
+  const scheduleIndex = new Map(scheduledIds.map((id, index) => [id, index]));
+
+  return [...grouped.values()]
+    .map((members) => {
+      const scheduledMembers = members
+        .filter((id) => scheduleIndex.has(id))
+        .sort((left, right) => scheduleIndex.get(left) - scheduleIndex.get(right));
+      const unscheduledMembers = members
+        .filter((id) => !scheduleIndex.has(id))
+        .sort((left, right) => nodeOrder.get(left) - nodeOrder.get(right));
+      return {
+        members: [...scheduledMembers, ...unscheduledMembers],
+        firstScheduledIndex: scheduledMembers.length
+          ? scheduleIndex.get(scheduledMembers[0])
+          : Number.POSITIVE_INFINITY,
+        firstNodeOrder: Math.min(...members.map((id) => nodeOrder.get(id))),
+      };
+    })
+    .sort((left, right) => {
+      if (left.firstScheduledIndex !== right.firstScheduledIndex) {
+        return left.firstScheduledIndex - right.firstScheduledIndex;
+      }
+      return left.firstNodeOrder - right.firstNodeOrder;
+    });
+}
+
+function normalizePoint(point) {
+  const length = Math.hypot(point.x, point.y, point.z) || 1;
+  return {
+    x: point.x / length,
+    y: point.y / length,
+    z: point.z / length,
+  };
+}
+
+function crossPoint(left, right) {
+  return {
+    x: left.y * right.z - left.z * right.y,
+    y: left.z * right.x - left.x * right.z,
+    z: left.x * right.y - left.y * right.x,
+  };
+}
+
+function projectLevelPoint({
+  angle,
+  radialRatio,
+  centerX,
+  centerY,
+  radius,
+  viewMode,
+  rotationX,
+  rotationY,
+}) {
+  const basePoint = {
+    x: Math.cos(angle) * radialRatio,
+    y: Math.sin(angle) * radialRatio,
+    z: 0,
+  };
+
+  if (viewMode === "2d") {
+    return {
+      x: centerX + basePoint.x * radius,
+      y: centerY + basePoint.y * radius,
+      z: radialRatio * 0.001,
+      depth: 1,
+      basePoint,
+    };
+  }
+
+  const perspective = 3.2;
+  const rotated = rotateX(rotateY(basePoint, rotationY), rotationX);
+  const depth = perspective / (perspective - rotated.z);
+  return {
+    x: centerX + rotated.x * radius * depth,
+    y: centerY + rotated.y * radius * depth,
+    z: rotated.z,
+    depth,
+    basePoint,
+  };
+}
+
+function projectSpatialPoint({ point, centerX, centerY, radius, rotationX, rotationY }) {
+  const perspective = 3.2;
+  const rotated = rotateX(rotateY(point, rotationY), rotationX);
+  const depth = perspective / (perspective - rotated.z);
+  return {
+    x: centerX + rotated.x * radius * depth,
+    y: centerY + rotated.y * radius * depth,
+    z: rotated.z,
+    depth,
+  };
+}
+
+function buildClockwiseArcPath(from, to, options) {
+  if (
+    options.viewMode === "3d" &&
+    from.point3d &&
+    to.point3d &&
+    from.radialRatio != null &&
+    to.radialRatio != null
+  ) {
+    const start = normalizePoint(from.point3d);
+    const end = normalizePoint(to.point3d);
+    const dot = Math.max(-1, Math.min(1, start.x * end.x + start.y * end.y + start.z * end.z));
+    const omega = Math.acos(dot);
+    if (omega < 1e-5) {
+      return `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
+    }
+    const sinOmega = Math.sin(omega) || 1;
+    const radialRatio = from.radialRatio;
+    const steps = 14;
+    let path = `M ${from.x} ${from.y}`;
+    for (let index = 1; index <= steps; index += 1) {
+      const t = index / steps;
+      const scaleStart = Math.sin((1 - t) * omega) / sinOmega;
+      const scaleEnd = Math.sin(t * omega) / sinOmega;
+      const point = {
+        x: (start.x * scaleStart + end.x * scaleEnd) * radialRatio,
+        y: (start.y * scaleStart + end.y * scaleEnd) * radialRatio,
+        z: (start.z * scaleStart + end.z * scaleEnd) * radialRatio,
+      };
+      const projected = projectSpatialPoint({
+        point,
+        centerX: options.centerX,
+        centerY: options.centerY,
+        radius: options.radius,
+        rotationX: options.rotationX,
+        rotationY: options.rotationY,
+      });
+      path += ` L ${projected.x} ${projected.y}`;
+    }
+    return path;
+  }
+
+  if (from.level !== to.level || from.radialRatio == null || to.radialRatio == null) {
+    return `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
+  }
+
+  let delta = to.angle - from.angle;
+  while (delta <= 0) {
+    delta += Math.PI * 2;
+  }
+  const steps = Math.max(10, Math.ceil(delta / (Math.PI / 18)));
+  let path = `M ${from.x} ${from.y}`;
+
+  for (let index = 1; index <= steps; index += 1) {
+    const angle = from.angle + (delta * index) / steps;
+    const point = projectLevelPoint({
+      angle,
+      radialRatio: from.radialRatio,
+      centerX: options.centerX,
+      centerY: options.centerY,
+      radius: options.radius,
+      viewMode: options.viewMode,
+      rotationX: options.rotationX,
+      rotationY: options.rotationY,
+    });
+    path += ` L ${point.x} ${point.y}`;
+  }
+
+  return path;
+}
+
+function GlobeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.2" className="icon-globe-outline" />
+      <ellipse cx="12" cy="12" rx="3.9" ry="8.2" className="icon-globe-line" />
+      <path d="M3.8 12h16.4" className="icon-globe-line" />
+      <path d="M5.2 8.6c2.1 1 4.4 1.5 6.8 1.5s4.7-.5 6.8-1.5" className="icon-globe-line" />
+      <path d="M5.2 15.4c2.1-1 4.4-1.5 6.8-1.5s4.7.5 6.8 1.5" className="icon-globe-line" />
+    </svg>
+  );
+}
+
+function RingsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M3.8 6.4l5.1-2.3l6.2 2.1l5.1-2.2v13.6l-5.1 2.3l-6.2-2.1l-5.1 2.2z"
+        className="icon-map-outline"
+      />
+      <path d="M8.9 4.1v13.6" className="icon-map-line" />
+      <path d="M15.1 6.2v13.6" className="icon-map-line" />
+    </svg>
+  );
+}
+
+function CenterIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4.5 9V4.5H9" className="icon-map-line" />
+      <path d="M15 4.5h4.5V9" className="icon-map-line" />
+      <path d="M19.5 15v4.5H15" className="icon-map-line" />
+      <path d="M9 19.5H4.5V15" className="icon-map-line" />
+      <circle cx="12" cy="12" r="2.4" className="icon-globe-outline" />
+    </svg>
+  );
+}
+
+function NotesIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 4.5h8.8L18 7.7v11.8H6z" className="icon-map-outline" />
+      <path d="M14.8 4.5v3.2H18" className="icon-map-line" />
+      <path d="M8.4 10.2h7.2" className="icon-map-line" />
+      <path d="M8.4 13.4h7.2" className="icon-map-line" />
+      <path d="M8.4 16.6h4.8" className="icon-map-line" />
+    </svg>
+  );
+}
+
+function ChatIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 6.4h14v9.8H9.4L5 19.6z" className="icon-map-outline" />
+      <path d="M8 10.3h8" className="icon-map-line" />
+      <path d="M8 13.4h5.6" className="icon-map-line" />
+    </svg>
+  );
+}
+
+function cloneGraph(graph) {
+  return JSON.parse(JSON.stringify(graph));
+}
+
+function sanitizeGraph(graph) {
+  const nextGraph = cloneGraph(graph);
+  nextGraph.schedules = deriveScheduleEdges(nextGraph.nodes, nextGraph.dependencies);
+  const layout = computeGraphLayout({
+    nodes: nextGraph.nodes,
+    dependencies: nextGraph.dependencies,
+    schedules: nextGraph.schedules,
+  });
+  nextGraph.schedules = deriveScheduleEdges(nextGraph.nodes, nextGraph.dependencies);
+  return nextGraph;
+}
+
+function replaceNode(graph, nodeId, updater) {
+  return {
+    ...graph,
+    nodes: graph.nodes.map((node) => (node.id === nodeId ? updater(node) : node)),
+  };
+}
+
+function defaultForm(node) {
+  return {
+    title: node?.title || "",
+    notes: node?.notes || "",
+    startDate: node?.startDate || "",
+    bestBefore: node?.bestBefore || "",
+    expectedTime: node?.expectedTime ?? "",
+    realTime: node?.realTime ?? "",
+    expectedEffort: node?.expectedEffort ?? "",
+    realEffort: node?.realEffort ?? "",
+  };
+}
+
+function defaultNoteForm(note) {
+  return {
+    title: note?.title || "",
+    body: note?.body || "",
+  };
+}
+
+function toNumberOrNull(value) {
+  if (value === "" || value == null) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getWorkingHours(node, now) {
+  const base = Number(node.realTime || 0);
+  if (!node.workStartedAt) {
+    return base;
+  }
+  const elapsedMs = Math.max(0, now - new Date(node.workStartedAt).getTime());
+  return base + elapsedMs / 1000 / 60 / 60;
+}
+
+function buildSelectedDetails(node, layout, graph, now) {
+  if (!node) {
+    return null;
+  }
+  const ancestorIds = collectAncestors(node.id, layout.parentMap);
+  const totalExpectedChainTime =
+    [...ancestorIds, node.id].reduce((sum, id) => {
+      const target = graph.nodes.find((entry) => entry.id === id);
+      return sum + Number(target?.expectedTime || 0);
+    }, 0);
+  const directParents = layout.parentMap.get(node.id) || [];
+  const directChildren = layout.childMap.get(node.id) || [];
+  return {
+    level: layout.finalLevels.get(node.id) || 0,
+    baseLevel: layout.baseLevels.get(node.id) || 0,
+    scheduled: layout.scheduledIds.has(node.id),
+    parentCount: directParents.length,
+    childCount: directChildren.length,
+    chainExpectedTime: totalExpectedChainTime,
+    liveRealTime: getWorkingHours(node, now),
+    parents: directParents,
+    children: directChildren,
+  };
+}
+
+function computeFocusRotation(point) {
+  if (!point) {
+    return null;
+  }
+  const yaw = Math.atan2(-point.x, point.z);
+  const yawAligned = rotateY(point, yaw);
+  const pitch = Math.atan2(yawAligned.y, yawAligned.z);
+  return {
+    rotationY: yaw,
+    rotationX: pitch,
+  };
+}
+
+const TRANSITION_MS = {
+  outgoingNodes: 170,
+  outgoingEdges: 150,
+  layoutShift: 210,
+  incomingEdges: 80,
+  incomingNodes: 80,
+};
+
+function getDependencyEdgeId(edge) {
+  return `${edge.parentId}->${edge.childId}`;
+}
+
+function getScheduleEdgeId(edge) {
+  return `${edge.earlierId}~>${edge.laterId}`;
+}
+
+function buildGraphDiff(fromGraph, toGraph) {
+  const fromNodeIds = new Set(fromGraph.nodes.map((node) => node.id));
+  const toNodeIds = new Set(toGraph.nodes.map((node) => node.id));
+  const fromDependencyIds = new Set(fromGraph.dependencies.map(getDependencyEdgeId));
+  const toDependencyIds = new Set(toGraph.dependencies.map(getDependencyEdgeId));
+  const fromScheduleIds = new Set(fromGraph.schedules.map(getScheduleEdgeId));
+  const toScheduleIds = new Set(toGraph.schedules.map(getScheduleEdgeId));
+
+  const removedNodeIds = new Set([...fromNodeIds].filter((id) => !toNodeIds.has(id)));
+  const addedNodeIds = new Set([...toNodeIds].filter((id) => !fromNodeIds.has(id)));
+  const removedDependencyEdgeIds = new Set(
+    [...fromDependencyIds].filter((id) => !toDependencyIds.has(id)),
+  );
+  const addedDependencyEdgeIds = new Set(
+    [...toDependencyIds].filter((id) => !fromDependencyIds.has(id)),
+  );
+  const removedScheduleEdgeIds = new Set(
+    [...fromScheduleIds].filter((id) => !toScheduleIds.has(id)),
+  );
+  const addedScheduleEdgeIds = new Set(
+    [...toScheduleIds].filter((id) => !fromScheduleIds.has(id)),
+  );
+
+  return {
+    removedNodeIds,
+    addedNodeIds,
+    removedDependencyEdgeIds,
+    addedDependencyEdgeIds,
+    removedScheduleEdgeIds,
+    addedScheduleEdgeIds,
+    persistentNodeIds: new Set([...fromNodeIds].filter((id) => toNodeIds.has(id))),
+    persistentDependencyEdgeIds: new Set(
+      [...fromDependencyIds].filter((id) => toDependencyIds.has(id)),
+    ),
+    persistentScheduleEdgeIds: new Set(
+      [...fromScheduleIds].filter((id) => toScheduleIds.has(id)),
+    ),
+  };
+}
+
+function buildTransitionPhases(diff) {
+  const phases = [];
+  if (diff.removedNodeIds.size) {
+    phases.push("outgoing-nodes");
+  }
+  if (diff.removedDependencyEdgeIds.size || diff.removedScheduleEdgeIds.size) {
+    phases.push("outgoing-edges");
+  }
+  phases.push("layout-shift");
+  if (diff.addedDependencyEdgeIds.size || diff.addedScheduleEdgeIds.size) {
+    phases.push("incoming-edges");
+  }
+  if (diff.addedNodeIds.size) {
+    phases.push("incoming-nodes");
+  }
+  return phases;
+}
+
+function getPhaseDuration(phase) {
+  switch (phase) {
+    case "outgoing-nodes":
+      return TRANSITION_MS.outgoingNodes;
+    case "outgoing-edges":
+      return TRANSITION_MS.outgoingEdges;
+    case "layout-shift":
+      return TRANSITION_MS.layoutShift;
+    case "incoming-edges":
+      return TRANSITION_MS.incomingEdges;
+    case "incoming-nodes":
+      return TRANSITION_MS.incomingNodes;
+    default:
+      return 0;
+  }
+}
+
+function buildNodeLayoutMap(graph, layout, rotation2D) {
+  const nodeOrder = new Map(graph.nodes.map((node, index) => [node.id, index]));
+  const grouped = new Map();
+  graph.nodes.forEach((node) => {
+    const level = layout.finalLevels.get(node.id) || 0;
+    if (!grouped.has(level)) {
+      grouped.set(level, []);
+    }
+    grouped.get(level).push(node.id);
+  });
+
+  const byId = new Map();
+    [...grouped.entries()]
+      .sort(([left], [right]) => left - right)
+      .forEach(([level, ids]) => {
+        const { scheduledIds, scheduledSet } = buildLevelScheduleOrder(ids, graph.schedules, nodeOrder);
+        const clusters = buildLevelClusters(ids, layout.parentMap, nodeOrder, scheduledIds);
+        const ratio = layout.maxLevel === 0 ? 0.18 : 0.12 + (level / layout.maxLevel) * 0.88;
+        const isCenteredCore = level === 0 && ids.length === 1;
+        const clusterCount = Math.max(1, clusters.length);
+        const sector = clusterCount === 1 ? Math.PI * 1.25 : (Math.PI * 2) / clusterCount;
+        const clusterDescriptors = clusters
+          .map((cluster, clusterIndex) => {
+            const parentIds = [
+              ...new Set(cluster.members.flatMap((id) => layout.parentMap.get(id) || [])),
+            ];
+            const parentAngles = parentIds
+              .map((id) => byId.get(id)?.angle)
+              .filter((value) => Number.isFinite(value));
+            const desiredAngle = parentAngles.length
+              ? Math.atan2(
+                  parentAngles.reduce((sum, angle) => sum + Math.sin(angle), 0),
+                  parentAngles.reduce((sum, angle) => sum + Math.cos(angle), 0),
+                )
+              : -Math.PI / 2 + (clusterIndex / clusterCount) * Math.PI * 2 + rotation2D;
+            const parentPoints = parentIds
+              .map((id) => byId.get(id)?.point3d)
+              .filter((point) => point && (point.x !== 0 || point.y !== 0 || point.z !== 0));
+            const desiredDirection = parentPoints.length
+              ? normalizePoint(
+                  parentPoints.reduce(
+                    (sum, point) => ({
+                      x: sum.x + point.x,
+                      y: sum.y + point.y,
+                      z: sum.z + point.z,
+                    }),
+                    { x: 0, y: 0, z: 0 },
+                  ),
+                )
+              : fibonacciSphere(clusterIndex, clusterCount);
+
+            return {
+              cluster,
+              desiredAngle,
+              desiredDirection,
+            };
+          })
+          .sort((left, right) => left.desiredAngle - right.desiredAngle);
+
+        clusterDescriptors.forEach(({ cluster, desiredAngle, desiredDirection }) => {
+          const centerAngle = isCenteredCore ? -Math.PI / 2 : desiredAngle;
+          const surfaceCenter = isCenteredCore
+            ? { x: 0, y: 0, z: 0 }
+            : {
+                x: desiredDirection.x * ratio,
+                y: desiredDirection.y * ratio,
+                z: desiredDirection.z * ratio,
+              };
+          const surfaceDirection = isCenteredCore ? null : normalizePoint(surfaceCenter);
+          const tangentReference =
+            surfaceDirection && Math.abs(surfaceDirection.y) > 0.9
+              ? { x: 1, y: 0, z: 0 }
+              : { x: 0, y: 1, z: 0 };
+          const tangentA = surfaceDirection
+            ? normalizePoint(crossPoint(surfaceDirection, tangentReference))
+            : null;
+          const tangentB =
+            surfaceDirection && tangentA ? normalizePoint(crossPoint(surfaceDirection, tangentA)) : null;
+          const memberSpacing =
+            cluster.members.length <= 1
+              ? 0
+              : Math.min(0.24, sector / Math.max(3, cluster.members.length + 1));
+          const totalSpan = memberSpacing * Math.max(0, cluster.members.length - 1);
+
+          cluster.members.forEach((id, memberIndex) => {
+            const angle = isCenteredCore
+              ? -Math.PI / 2
+              : centerAngle - totalSpan / 2 + memberIndex * memberSpacing;
+            const localAngle =
+              cluster.members.length <= 1
+                ? 0
+                : -Math.PI / 2 + (memberIndex / cluster.members.length) * Math.PI * 2;
+            const localSpread =
+              cluster.members.length <= 1 ? 0 : Math.min(0.12, 0.04 + cluster.members.length * 0.012);
+            const point3d =
+              isCenteredCore || !surfaceDirection || !tangentA || !tangentB
+                ? { x: 0, y: 0, z: 0 }
+                : (() => {
+                    const lifted = normalizePoint({
+                      x:
+                        surfaceDirection.x +
+                        tangentA.x * Math.cos(localAngle) * localSpread +
+                        tangentB.x * Math.sin(localAngle) * localSpread,
+                      y:
+                        surfaceDirection.y +
+                        tangentA.y * Math.cos(localAngle) * localSpread +
+                        tangentB.y * Math.sin(localAngle) * localSpread,
+                      z:
+                        surfaceDirection.z +
+                        tangentA.z * Math.cos(localAngle) * localSpread +
+                        tangentB.z * Math.sin(localAngle) * localSpread,
+                    });
+                    return {
+                      x: lifted.x * ratio,
+                      y: lifted.y * ratio,
+                      z: lifted.z * ratio,
+                    };
+                  })();
+            byId.set(id, {
+              level,
+              baseLevel: layout.baseLevels.get(id) || 0,
+              scheduled: layout.scheduledIds.has(id),
+              radialRatio: isCenteredCore ? 0 : ratio,
+              angle,
+              point3d,
+              scheduleIndex: scheduledSet.has(id) ? scheduledIds.indexOf(id) : null,
+            });
+          });
+        });
+      });
+
+  return byId;
+}
+
+function buildProjectedGraph(graph, nodeLayout, options) {
+  const { size, zoom, viewMode, rotationX, rotationY, panOffset = { x: 0, y: 0 } } = options;
+  const centerX = size.width / 2 + panOffset.x;
+  const centerY = size.height / 2 + panOffset.y;
+  const radius = Math.min(size.width, size.height) * 0.39 * zoom;
+  const byId = {};
+  const ordered = graph.nodes.map((node) => {
+    const spatial = nodeLayout.get(node.id) || {
+      level: 0,
+      baseLevel: 0,
+      scheduled: false,
+      radialRatio: 0,
+      angle: -Math.PI / 2,
+      point3d: { x: 0, y: 0, z: 0 },
+    };
+    const point =
+      viewMode === "2d"
+        ? projectLevelPoint({
+            angle: spatial.angle,
+            radialRatio: spatial.radialRatio,
+            centerX,
+            centerY,
+            radius,
+            viewMode,
+            rotationX,
+            rotationY,
+          })
+        : projectSpatialPoint({
+            point: spatial.point3d,
+            centerX,
+            centerY,
+            radius,
+            rotationX,
+            rotationY,
+          });
+    const projectedNode = {
+      ...node,
+      level: spatial.level,
+      baseLevel: spatial.baseLevel,
+      scheduleOffset: 0,
+      scheduled: spatial.scheduled,
+      angle: spatial.angle,
+      radialRatio: spatial.radialRatio,
+      point3d: spatial.point3d,
+      x: point.x,
+      y: point.y,
+      z: point.z,
+      depth: point.depth,
+    };
+    byId[node.id] = projectedNode;
+    return projectedNode;
+  });
+
+  ordered.sort((left, right) => left.z - right.z);
+  return { ordered, byId, centerX, centerY, radius };
+}
+
+function buildLevelShells(maxLevel, sessionSeed = 0) {
+  const boundedMax = Math.max(maxLevel, 0);
+  return Array.from({ length: boundedMax + 1 }, (_, level) => {
+    const ratio = boundedMax === 0 ? 0.18 : 0.12 + (level / boundedMax) * 0.88;
+    return {
+      level,
+      ratio,
+      ...getLevelShellStyle(level, boundedMax, sessionSeed),
+    };
+  });
+}
+
+export default function App() {
+  const shellRef = useRef(null);
+  const dragRef = useRef({ active: false, mode: null, x: 0, y: 0, angle: 0 });
+  const transitionTimersRef = useRef([]);
+  const modeMorphFrameRef = useRef(0);
+  const viewportTweenFrameRef = useRef(0);
+  const levelSeedRef = useRef(Math.random() * 10000);
+  const apiOptions = useMemo(
+    () => ({
+      baseUrl: import.meta.env.VITE_MOVE37_API_BASE_URL || "",
+      token: import.meta.env.VITE_MOVE37_API_TOKEN,
+    }),
+    [],
+  );
+  const {
+    graph: canonicalGraph,
+    error: apiError,
+    loading: graphLoading,
+    reload: reloadGraph,
+    createActivity,
+    deleteActivity,
+    deleteDependency,
+    forkActivity,
+    insertBetween,
+    replaceDependencies,
+    startWork: startWorkMutation,
+    stopWork: stopWorkMutation,
+    updateActivity,
+  } = useActivityGraph(apiOptions);
+  const {
+    notes,
+    createNote,
+    getNote,
+    importTxtNotes,
+    updateNote,
+  } = useNotes(apiOptions);
+  const {
+    session: chatSession,
+    createSession,
+    reload: reloadChatSession,
+    sendMessage,
+    loading: chatLoading,
+  } = useChatSession(apiOptions);
+  const [graph, setGraph] = useState(() => sanitizeGraph(DEFAULT_GRAPH));
+  const [transition, setTransition] = useState(null);
+  const [viewMode, setViewMode] = useState("3d");
+  const [modeMorph, setModeMorph] = useState(null);
+  const [size, setSize] = useState({ width: 1200, height: 760 });
+  const [autoRotation, setAutoRotation] = useState(0);
+  const [rotationX, setRotationX] = useState(0.52);
+  const [rotationY, setRotationY] = useState(0);
+  const [rotation2D, setRotation2D] = useState(0);
+  const [zoom, setZoom] = useState(1);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [isPointerDown, setIsPointerDown] = useState(false);
+  const [selectedId, setSelectedId] = useState(null);
+  const [messageIndex, setMessageIndex] = useState(0);
+  const [messageVisible, setMessageVisible] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchState, setSearchState] = useState("idle");
+  const [nodesVisible, setNodesVisible] = useState(true);
+  const [contextMenu, setContextMenu] = useState(null);
+  const [sheet, setSheet] = useState(null);
+  const [form, setForm] = useState(defaultForm(null));
+  const [leftPanel, setLeftPanel] = useState(null);
+  const [notesTab, setNotesTab] = useState("write");
+  const [noteForm, setNoteForm] = useState(defaultNoteForm(null));
+  const [activeNote, setActiveNote] = useState(null);
+  const [draftNoteNodeId, setDraftNoteNodeId] = useState(null);
+  const [importFiles, setImportFiles] = useState([]);
+  const [chatInput, setChatInput] = useState("");
+  const [error, setError] = useState("");
+  const [now, setNow] = useState(() => Date.now());
+  const [ambientFlow, setAmbientFlow] = useState({
+    dependencyEdgeIds: new Set(),
+  });
+  const [workingId, setWorkingId] = useState(null);
+  const isTransitioning = transition != null;
+  const isMorphing = modeMorph != null;
+  const displayViewMode = modeMorph ? modeMorph.to : viewMode;
+  const levelSeed = levelSeedRef.current;
+
+  function clearTransitionTimers() {
+    transitionTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    transitionTimersRef.current = [];
+  }
+
+  function stopViewportTween() {
+    if (viewportTweenFrameRef.current) {
+      cancelAnimationFrame(viewportTweenFrameRef.current);
+      viewportTweenFrameRef.current = 0;
+    }
+  }
+
+  useEffect(() => {
+    if (!canonicalGraph || isTransitioning) {
+      return;
+    }
+    setGraph(sanitizeGraph(canonicalGraph));
+  }, [canonicalGraph, isTransitioning]);
+
+  useEffect(() => {
+    if (!apiError) {
+      return;
+    }
+    setError(apiError.message);
+  }, [apiError]);
+
+  useEffect(() => {
+    const node = shellRef.current;
+    if (!node) {
+      return undefined;
+    }
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) {
+        return;
+      }
+      setSize({
+        width: Math.max(320, Math.floor(entry.contentRect.width)),
+        height: Math.max(340, Math.floor(entry.contentRect.height)),
+      });
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(
+    () => () => {
+      clearTransitionTimers();
+      if (modeMorphFrameRef.current) {
+        cancelAnimationFrame(modeMorphFrameRef.current);
+      }
+      stopViewportTween();
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const shouldRotate3D =
+      (!isMorphing && viewMode === "3d") || (isMorphing && modeMorph.to === "3d");
+    if (workingId || !shouldRotate3D || isPointerDown) {
+      return undefined;
+    }
+    let frame = 0;
+    let last = 0;
+    const tick = (timestamp) => {
+      if (!last) {
+        last = timestamp;
+      }
+      const delta = timestamp - last;
+      last = timestamp;
+      setAutoRotation((value) => (value + delta * 0.00004) % (Math.PI * 2));
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [isMorphing, isPointerDown, modeMorph?.to, viewMode, workingId]);
+
+  useEffect(() => {
+    if (workingId || viewMode !== "2d" || isPointerDown || isMorphing) {
+      return undefined;
+    }
+    let frame = 0;
+    let last = 0;
+    const tick = (timestamp) => {
+      if (!last) {
+        last = timestamp;
+      }
+      const delta = timestamp - last;
+      last = timestamp;
+      setRotation2D((value) => (value + delta * 0.000022) % (Math.PI * 2));
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [isMorphing, isPointerDown, viewMode, workingId]);
+
+  useEffect(
+    () => () => {
+      if (modeMorphFrameRef.current) {
+        cancelAnimationFrame(modeMorphFrameRef.current);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!modeMorph || modeMorph.progress !== 0) {
+      return undefined;
+    }
+    const duration = 860;
+    let start = 0;
+    const { from, to } = modeMorph;
+    const tick = (timestamp) => {
+      if (!start) {
+        start = timestamp;
+      }
+      const progress = Math.min(1, (timestamp - start) / duration);
+      setModeMorph({ from, to, progress });
+      if (progress >= 1) {
+        setViewMode(to);
+        setModeMorph(null);
+        modeMorphFrameRef.current = 0;
+        return;
+      }
+      modeMorphFrameRef.current = requestAnimationFrame(tick);
+    };
+    modeMorphFrameRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (modeMorphFrameRef.current) {
+        cancelAnimationFrame(modeMorphFrameRef.current);
+        modeMorphFrameRef.current = 0;
+      }
+    };
+  }, [modeMorph?.from, modeMorph?.to]);
+
+  useEffect(() => {
+    const holdMs = 9000;
+    const fadeMs = 750;
+    let holdTimer = 0;
+    let fadeTimer = 0;
+    const schedule = () => {
+      holdTimer = window.setTimeout(() => {
+        setMessageVisible(false);
+        fadeTimer = window.setTimeout(() => {
+          setMessageIndex((value) => (value + 1) % TOPBAR_MESSAGES.length);
+          setMessageVisible(true);
+          schedule();
+        }, fadeMs);
+      }, holdMs);
+    };
+    schedule();
+    return () => {
+      window.clearTimeout(holdTimer);
+      window.clearTimeout(fadeTimer);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!workingId) {
+      return undefined;
+    }
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [workingId]);
+
+  useEffect(() => {
+    if (!error) {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setError(""), 4500);
+    return () => window.clearTimeout(timer);
+  }, [error]);
+
+  const layout = useMemo(() => computeGraphLayout(graph), [graph]);
+
+  useEffect(() => {
+    if (selectedId || isTransitioning || graph.nodes.length === 0) {
+      setAmbientFlow({ dependencyEdgeIds: new Set() });
+      return undefined;
+    }
+
+    const refreshAmbient = () => {
+      setAmbientFlow(buildAmbientTreeFlow(graph, layout));
+    };
+    refreshAmbient();
+    const groupTimer = window.setInterval(refreshAmbient, 8000);
+    return () => {
+      window.clearInterval(groupTimer);
+    };
+  }, [graph, isTransitioning, layout, selectedId]);
+
+  const nodesById = useMemo(
+    () => new Map(graph.nodes.map((node) => [node.id, node])),
+    [graph.nodes],
+  );
+  const nodeLayout = useMemo(() => buildNodeLayoutMap(graph, layout, rotation2D), [graph, layout, rotation2D]);
+
+  const workingNode = workingId ? nodesById.get(workingId) || null : null;
+  const workingPoint = useMemo(() => {
+    if (!workingNode) {
+      return null;
+    }
+    const spatial = nodeLayout.get(workingId);
+    if (!spatial) {
+      return null;
+    }
+    return {
+      x: spatial.point3d?.x ?? Math.cos(spatial.angle) * spatial.radialRatio,
+      y: spatial.point3d?.y ?? Math.sin(spatial.angle) * spatial.radialRatio,
+      z: spatial.point3d?.z ?? 0,
+    };
+  }, [nodeLayout, workingId, workingNode]);
+  const focusRotation = useMemo(() => computeFocusRotation(workingPoint), [workingPoint]);
+  const effectiveRotationX = workingId && focusRotation ? focusRotation.rotationX : rotationX;
+  const effectiveRotationY =
+    workingId && focusRotation ? focusRotation.rotationY : rotationY + autoRotation;
+
+  const projected = useMemo(
+    () =>
+      buildProjectedGraph(graph, nodeLayout, {
+        size,
+        zoom,
+        viewMode,
+        rotationX: effectiveRotationX,
+        rotationY: effectiveRotationY,
+        panOffset,
+      }),
+    [effectiveRotationX, effectiveRotationY, graph, nodeLayout, panOffset, size, viewMode, zoom],
+  );
+  const projected2D = useMemo(
+    () =>
+      buildProjectedGraph(graph, nodeLayout, {
+        size,
+        zoom,
+        viewMode: "2d",
+        rotationX: effectiveRotationX,
+        rotationY: effectiveRotationY,
+        panOffset,
+      }),
+    [effectiveRotationX, effectiveRotationY, graph, nodeLayout, panOffset, size, zoom],
+  );
+  const projected3D = useMemo(
+    () =>
+      buildProjectedGraph(graph, nodeLayout, {
+        size,
+        zoom,
+        viewMode: "3d",
+        rotationX: effectiveRotationX,
+        rotationY: effectiveRotationY,
+        panOffset,
+      }),
+    [effectiveRotationX, effectiveRotationY, graph, nodeLayout, panOffset, size, zoom],
+  );
+
+  const transitionFromNodeLayout = useMemo(
+    () =>
+      transition ? buildNodeLayoutMap(transition.fromGraph, transition.fromLayout, rotation2D) : null,
+    [rotation2D, transition],
+  );
+  const transitionToNodeLayout = useMemo(
+    () =>
+      transition ? buildNodeLayoutMap(transition.toGraph, transition.toLayout, rotation2D) : null,
+    [rotation2D, transition],
+  );
+  const transitionFromProjected = useMemo(
+    () =>
+      transition && transitionFromNodeLayout
+        ? buildProjectedGraph(transition.fromGraph, transitionFromNodeLayout, {
+            size,
+            zoom,
+            viewMode,
+            rotationX: effectiveRotationX,
+            rotationY: effectiveRotationY,
+            panOffset,
+          })
+        : null,
+    [
+      effectiveRotationX,
+      effectiveRotationY,
+      size,
+      transition,
+      transitionFromNodeLayout,
+      viewMode,
+      zoom,
+      panOffset,
+    ],
+  );
+  const transitionToProjected = useMemo(
+    () =>
+      transition && transitionToNodeLayout
+        ? buildProjectedGraph(transition.toGraph, transitionToNodeLayout, {
+            size,
+            zoom,
+            viewMode,
+            rotationX: effectiveRotationX,
+            rotationY: effectiveRotationY,
+            panOffset,
+          })
+        : null,
+    [
+      effectiveRotationX,
+      effectiveRotationY,
+      size,
+      transition,
+      transitionToNodeLayout,
+      viewMode,
+      zoom,
+      panOffset,
+    ],
+  );
+
+  const selected = selectedId ? nodesById.get(selectedId) || null : null;
+  const selectedDetails = useMemo(
+    () => buildSelectedDetails(selected, layout, graph, now),
+    [graph, layout, now, selected],
+  );
+  const levelShells = useMemo(
+    () => buildLevelShells(layout.maxLevel, levelSeed),
+    [layout.maxLevel, levelSeed],
+  );
+
+  const selectedDependencyEdges = useMemo(
+    () =>
+      graph.dependencies.filter(
+        (edge) => edge.parentId === selectedId || edge.childId === selectedId,
+      ),
+    [graph.dependencies, selectedId],
+  );
+
+  const selectedScheduleEdges = useMemo(
+    () =>
+      graph.schedules.filter(
+        (edge) => edge.earlierId === selectedId || edge.laterId === selectedId,
+      ),
+    [graph.schedules, selectedId],
+  );
+
+  const highlightedDependencyIds = useMemo(() => {
+    if (!selectedId) {
+      return new Set();
+    }
+    return new Set([
+      selectedId,
+      ...collectAncestors(selectedId, layout.parentMap),
+      ...collectDescendants(selectedId, layout.childMap),
+    ]);
+  }, [layout.childMap, layout.parentMap, selectedId]);
+
+  const renderState = useMemo(() => {
+    if (!transition || !transitionFromProjected || !transitionToProjected) {
+      return {
+        projected,
+        dependencyEdges: graph.dependencies.map((edge) => ({
+          ...edge,
+          id: getDependencyEdgeId(edge),
+          transitionState: "",
+        })),
+        scheduleEdges: graph.schedules.map((edge) => ({
+          ...edge,
+          id: getScheduleEdgeId(edge),
+          transitionState: "",
+        })),
+        nodes: projected.ordered.map((node) => ({
+          ...node,
+          transitionState: "",
+        })),
+        levelShells: levelShells.map((shell) => ({
+          ...shell,
+          transitionState: "",
+        })),
+      };
+    }
+
+    const outgoingPhase =
+      transition.phase === "outgoing-nodes" || transition.phase === "outgoing-edges";
+    const baseProjected = outgoingPhase ? transitionFromProjected : transitionToProjected;
+    const dependencyEdges = [];
+    const scheduleEdges = [];
+    const nodes = [];
+
+    if (outgoingPhase) {
+      transition.fromGraph.dependencies.forEach((edge) => {
+        dependencyEdges.push({
+          ...edge,
+          id: getDependencyEdgeId(edge),
+          transitionState:
+            transition.phase === "outgoing-edges" &&
+            transition.removedDependencyEdgeIds.has(getDependencyEdgeId(edge))
+              ? "exiting"
+              : "",
+        });
+      });
+      transition.fromGraph.schedules.forEach((edge) => {
+        scheduleEdges.push({
+          ...edge,
+          id: getScheduleEdgeId(edge),
+          transitionState:
+            transition.phase === "outgoing-edges" &&
+            transition.removedScheduleEdgeIds.has(getScheduleEdgeId(edge))
+              ? "exiting"
+              : "",
+        });
+      });
+      transitionFromProjected.ordered.forEach((node) => {
+        if (
+          transition.phase === "outgoing-edges" &&
+          transition.removedNodeIds.has(node.id)
+        ) {
+          return;
+        }
+        nodes.push({
+          ...node,
+          transitionState:
+            transition.phase === "outgoing-nodes" && transition.removedNodeIds.has(node.id)
+              ? "exiting"
+              : "",
+        });
+      });
+
+      return {
+        projected: baseProjected,
+        dependencyEdges,
+        scheduleEdges,
+        nodes,
+        levelShells: buildLevelShells(transition.fromLayout.maxLevel, levelSeed).map((shell) => ({
+          ...shell,
+          transitionState: "",
+        })),
+      };
+    }
+
+    transition.toGraph.dependencies.forEach((edge) => {
+      const edgeId = getDependencyEdgeId(edge);
+      if (transition.phase === "layout-shift" && transition.addedDependencyEdgeIds.has(edgeId)) {
+        return;
+      }
+      dependencyEdges.push({
+        ...edge,
+        id: edgeId,
+        transitionState: transition.addedDependencyEdgeIds.has(edgeId) ? "entering" : "moving",
+      });
+    });
+    transition.toGraph.schedules.forEach((edge) => {
+      const edgeId = getScheduleEdgeId(edge);
+      if (transition.phase === "layout-shift" && transition.addedScheduleEdgeIds.has(edgeId)) {
+        return;
+      }
+      scheduleEdges.push({
+        ...edge,
+        id: edgeId,
+        transitionState: transition.addedScheduleEdgeIds.has(edgeId) ? "entering" : "moving",
+      });
+    });
+    transitionToProjected.ordered.forEach((node) => {
+      if (
+        (transition.phase === "layout-shift" || transition.phase === "incoming-edges") &&
+        transition.addedNodeIds.has(node.id)
+      ) {
+        return;
+      }
+      nodes.push({
+        ...node,
+        transitionState: transition.addedNodeIds.has(node.id) ? "entering" : "moving",
+      });
+    });
+
+    const shellMap = new Map();
+    if (transition.phase === "layout-shift") {
+      buildLevelShells(transition.fromLayout.maxLevel, levelSeed).forEach((shell) => {
+        shellMap.set(shell.level, {
+          ...shell,
+          transitionState: "exiting",
+        });
+      });
+      buildLevelShells(transition.toLayout.maxLevel, levelSeed).forEach((shell) => {
+        shellMap.set(shell.level, {
+          ...shell,
+          transitionState: shellMap.has(shell.level) ? "moving" : "entering",
+        });
+      });
+    } else {
+      buildLevelShells(transition.toLayout.maxLevel, levelSeed).forEach((shell) => {
+        shellMap.set(shell.level, {
+          ...shell,
+          transitionState: "",
+        });
+      });
+    }
+
+    return {
+      projected: baseProjected,
+      dependencyEdges,
+      scheduleEdges,
+      nodes,
+      levelShells: [...shellMap.values()],
+    };
+  }, [
+    graph.dependencies,
+    graph.schedules,
+    levelShells,
+    projected,
+    transition,
+    transitionFromProjected,
+    transitionToProjected,
+    levelSeed,
+  ]);
+  const renderMaxLevel = useMemo(
+    () => Math.max(0, ...renderState.levelShells.map((shell) => shell.level)),
+    [renderState.levelShells],
+  );
+  const displayProjected = useMemo(() => {
+    if (transition || !modeMorph) {
+      return renderState.projected;
+    }
+    const fromProjected = modeMorph.from === "2d" ? projected2D : projected3D;
+    const toProjected = modeMorph.to === "2d" ? projected2D : projected3D;
+    return interpolateProjectedGraphs(fromProjected, toProjected, renderState.nodes, modeMorph.progress);
+  }, [modeMorph, projected2D, projected3D, renderState.nodes, renderState.projected, transition]);
+  const displayNodes = useMemo(() => {
+    if (!displayProjected?.ordered) {
+      return renderState.nodes;
+    }
+    const nodeStateById = new Map(renderState.nodes.map((node) => [node.id, node]));
+    return displayProjected.ordered.map((projectedNode) => ({
+      ...nodeStateById.get(projectedNode.id),
+      ...projectedNode,
+    }));
+  }, [displayProjected, renderState.nodes]);
+
+  useEffect(() => {
+    const active = graph.nodes.find((node) => node.workStartedAt);
+    setWorkingId(active?.id || null);
+  }, [graph]);
+
+  useEffect(() => {
+    if (workingId) {
+      setSelectedId(workingId);
+    }
+  }, [workingId]);
+
+  function updateGraph(mutator) {
+    const draft = cloneGraph(graph);
+    mutator(draft);
+    const nextGraph = sanitizeGraph(draft);
+    setGraph(nextGraph);
+    return nextGraph;
+  }
+
+  function runLightweightMutation(mutator, action) {
+    if (isTransitioning) {
+      return;
+    }
+    const previousGraph = cloneGraph(graph);
+    try {
+      updateGraph(mutator);
+    } catch (nextError) {
+      setError(nextError.message);
+      return;
+    }
+    void action().catch((nextError) => {
+      setGraph(sanitizeGraph(canonicalGraph || previousGraph));
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    });
+  }
+
+  function startStructuralTransition(operation, mutator, action) {
+    if (isTransitioning) {
+      return;
+    }
+    const fromGraph = cloneGraph(graph);
+    const draft = cloneGraph(graph);
+    mutator(draft);
+    const toGraph = sanitizeGraph(draft);
+    const diff = buildGraphDiff(fromGraph, toGraph);
+    const hasStructuralChange =
+      diff.removedNodeIds.size ||
+      diff.addedNodeIds.size ||
+      diff.removedDependencyEdgeIds.size ||
+      diff.addedDependencyEdgeIds.size ||
+      diff.removedScheduleEdgeIds.size ||
+      diff.addedScheduleEdgeIds.size;
+    if (!hasStructuralChange) {
+      setGraph(toGraph);
+      if (action) {
+        void action().catch((nextError) => {
+          setGraph(sanitizeGraph(canonicalGraph || fromGraph));
+          setError(nextError instanceof Error ? nextError.message : String(nextError));
+        });
+      }
+      return;
+    }
+
+    clearTransitionTimers();
+    const fromLayout = computeGraphLayout(fromGraph);
+    const toLayout = computeGraphLayout(toGraph);
+    const phases = buildTransitionPhases(diff);
+    const transitionId = Date.now();
+    const selectedRemoved = selectedId && diff.removedNodeIds.has(selectedId);
+    setContextMenu(null);
+
+    setTransition({
+      id: transitionId,
+      type: "structural",
+      operation,
+      phase: phases[0],
+      fromGraph,
+      toGraph,
+      fromLayout,
+      toLayout,
+      ...diff,
+    });
+
+    let elapsed = 0;
+    phases.forEach((phase) => {
+      const timer = window.setTimeout(() => {
+        setTransition((current) =>
+          current && current.id === transitionId ? { ...current, phase } : current,
+        );
+        if (phase === "outgoing-edges" && selectedRemoved) {
+          setSelectedId(null);
+        }
+        if (phase === "layout-shift") {
+          setGraph(toGraph);
+        }
+      }, elapsed);
+      transitionTimersRef.current.push(timer);
+      elapsed += getPhaseDuration(phase);
+    });
+
+    transitionTimersRef.current.push(
+      window.setTimeout(() => {
+        setTransition((current) => (current && current.id === transitionId ? null : current));
+        clearTransitionTimers();
+      }, elapsed),
+    );
+
+    if (action) {
+      void action().catch((nextError) => {
+        clearTransitionTimers();
+        setTransition(null);
+        setGraph(sanitizeGraph(canonicalGraph || fromGraph));
+        setError(nextError instanceof Error ? nextError.message : String(nextError));
+      });
+    }
+  }
+
+  async function runSearch() {
+    if (searchState === "searching") {
+      return;
+    }
+    const query = searchQuery.trim().toLowerCase();
+    setSelectedId(null);
+    setNodesVisible(false);
+    setSearchState("searching");
+    await new Promise((resolve) => window.setTimeout(resolve, 700));
+    const found = query
+      ? graph.nodes.find((node) => {
+          const title = node.title.toLowerCase();
+          const id = node.id.toLowerCase();
+          return title.includes(query) || id.includes(query);
+        })
+      : null;
+    setSearchState(found ? "success" : "failure");
+    if (found) {
+      setSelectedId(found.id);
+    }
+    setNodesVisible(true);
+    await new Promise((resolve) => window.setTimeout(resolve, 750));
+    setSearchState("idle");
+  }
+
+  function openSheet(nextSheet, nextForm = defaultForm(null)) {
+    if (isTransitioning) {
+      return;
+    }
+    setContextMenu(null);
+    setSheet(nextSheet);
+    setForm(nextForm);
+  }
+
+  function closeSheet() {
+    setSheet(null);
+    setForm(defaultForm(null));
+  }
+
+  function isBackgroundTarget(target, currentTarget) {
+    if (target === currentTarget) {
+      return true;
+    }
+    const interactive = target?.closest?.(
+      ".node-core, .node-halo, .node-soft-edge, .node-label, .edge-line, .edge-ribbon, .edge-hit-area",
+    );
+    if (interactive) {
+      return false;
+    }
+    return true;
+  }
+
+  function getPointerAngle(event) {
+    const bounds = shellRef.current?.getBoundingClientRect();
+    if (!bounds) {
+      return 0;
+    }
+    const centerX = bounds.left + bounds.width / 2;
+    const centerY = bounds.top + bounds.height / 2;
+    return Math.atan2(event.clientY - centerY, event.clientX - centerX);
+  }
+
+  function onPointerDown(event) {
+    setContextMenu(null);
+    stopViewportTween();
+    setIsPointerDown(true);
+    const backgroundTarget = isBackgroundTarget(event.target, event.currentTarget);
+    if (event.button !== 0 || workingId || isMorphing || !backgroundTarget) {
+      return;
+    }
+    const panDrag = event.ctrlKey || event.metaKey;
+    if (viewMode === "2d") {
+      dragRef.current = {
+        active: true,
+        mode: panDrag ? "pan" : "2d",
+        x: event.clientX,
+        y: event.clientY,
+        angle: getPointerAngle(event),
+      };
+      setIsDragging(true);
+      return;
+    }
+    dragRef.current = {
+      active: true,
+      mode: panDrag ? "pan" : "3d",
+      x: event.clientX,
+      y: event.clientY,
+      angle: 0,
+    };
+    setIsDragging(true);
+  }
+
+  function onPointerMove(event) {
+    if (!dragRef.current.active || workingId) {
+      return;
+    }
+    if (dragRef.current.mode === "pan") {
+      const dx = event.clientX - dragRef.current.x;
+      const dy = event.clientY - dragRef.current.y;
+      dragRef.current.x = event.clientX;
+      dragRef.current.y = event.clientY;
+      setPanOffset((value) => ({ x: value.x + dx, y: value.y + dy }));
+      return;
+    }
+    if (dragRef.current.mode === "2d") {
+      const nextAngle = getPointerAngle(event);
+      let delta = nextAngle - dragRef.current.angle;
+      if (delta > Math.PI) {
+        delta -= Math.PI * 2;
+      } else if (delta < -Math.PI) {
+        delta += Math.PI * 2;
+      }
+      dragRef.current.angle = nextAngle;
+      setRotation2D((value) => value + delta);
+      return;
+    }
+    const dx = event.clientX - dragRef.current.x;
+    const dy = event.clientY - dragRef.current.y;
+    dragRef.current.x = event.clientX;
+    dragRef.current.y = event.clientY;
+    setRotationY((value) => value + dx * 0.0052);
+    setRotationX((value) => {
+      const next = value + dy * 0.0038;
+      return Math.max(-1.45, Math.min(1.45, next));
+    });
+  }
+
+  function stopDragging() {
+    dragRef.current.active = false;
+    dragRef.current.mode = null;
+    setIsDragging(false);
+    setIsPointerDown(false);
+  }
+
+  function switchViewMode(nextMode) {
+    if (nextMode === viewMode || isMorphing) {
+      return;
+    }
+    setModeMorph({ from: viewMode, to: nextMode, progress: 0 });
+  }
+
+  function onWheel(event) {
+    if (isMorphing) {
+      return;
+    }
+    stopViewportTween();
+    if (event.cancelable) {
+      event.preventDefault();
+    }
+    const zoomDelta = event.deltaY > 0 ? -0.08 : 0.08;
+    setZoom((value) => Math.max(0.55, Math.min(1.8, value + zoomDelta)));
+  }
+
+  function openContextMenu(event, nodeId) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (isTransitioning) {
+      return;
+    }
+    setSelectedId(nodeId);
+    setContextMenu({
+      kind: "node",
+      x: event.clientX,
+      y: event.clientY,
+      nodeId,
+    });
+  }
+
+  function openDependencyEdgeContextMenu(event, parentId, childId) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (isTransitioning) {
+      return;
+    }
+    setSelectedId(childId);
+    setContextMenu({
+      kind: "dependency-edge",
+      x: event.clientX,
+      y: event.clientY,
+      parentId,
+      childId,
+    });
+  }
+
+  function openScheduleEdgeContextMenu(event, earlierId, laterId) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (isTransitioning) {
+      return;
+    }
+    setSelectedId(laterId);
+    setContextMenu({
+      kind: "schedule-edge",
+      x: event.clientX,
+      y: event.clientY,
+      earlierId,
+      laterId,
+    });
+  }
+
+  function openBackgroundContextMenu(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (isTransitioning || !isBackgroundTarget(event.target, event.currentTarget)) {
+      return;
+    }
+    setContextMenu({
+      kind: "background",
+      x: event.clientX,
+      y: event.clientY,
+    });
+  }
+
+  function toggleSelectedNode(nodeId) {
+    stopViewportTween();
+    const node = nodesById.get(nodeId);
+    if (node?.kind === "note") {
+      if (node.linkedNoteId) {
+        void openExistingNote(node.linkedNoteId);
+      } else {
+        openDraftNoteWorkspace();
+      }
+      return;
+    }
+    setSelectedId((current) => (current === nodeId ? null : nodeId));
+  }
+
+  function animateViewport(nextState) {
+    stopViewportTween();
+    const startZoom = zoom;
+    const startPan = panOffset;
+    const targetZoom = nextState.zoom ?? zoom;
+    const targetPan = nextState.panOffset ?? panOffset;
+    const duration = 380;
+    let start = 0;
+
+    const tick = (timestamp) => {
+      if (!start) {
+        start = timestamp;
+      }
+      const progress = Math.min(1, (timestamp - start) / duration);
+      const eased = 1 - (1 - progress) * (1 - progress) * (1 - progress);
+      setZoom(startZoom + (targetZoom - startZoom) * eased);
+      setPanOffset({
+        x: startPan.x + (targetPan.x - startPan.x) * eased,
+        y: startPan.y + (targetPan.y - startPan.y) * eased,
+      });
+      if (progress >= 1) {
+        viewportTweenFrameRef.current = 0;
+        return;
+      }
+      viewportTweenFrameRef.current = requestAnimationFrame(tick);
+    };
+
+    viewportTweenFrameRef.current = requestAnimationFrame(tick);
+  }
+
+  function recenterView() {
+    animateViewport({ panOffset: { x: 0, y: 0 } });
+  }
+
+  function focusPanel() {
+    animateViewport({
+      panOffset: {
+        x: Math.round(size.width * 0.17),
+        y: 0,
+      },
+    });
+  }
+
+  function removeDraftNoteNode() {
+    if (!draftNoteNodeId) {
+      return;
+    }
+    setGraph((current) =>
+      sanitizeGraph({
+        ...current,
+        nodes: current.nodes.filter((node) => node.id !== draftNoteNodeId),
+        dependencies: current.dependencies.filter(
+          (edge) => edge.parentId !== draftNoteNodeId && edge.childId !== draftNoteNodeId,
+        ),
+        schedules: current.schedules.filter(
+          (edge) => edge.earlierId !== draftNoteNodeId && edge.laterId !== draftNoteNodeId,
+        ),
+      }),
+    );
+    setDraftNoteNodeId(null);
+  }
+
+  function openDraftNoteWorkspace() {
+    stopViewportTween();
+    setContextMenu(null);
+    setSelectedId(null);
+    setActiveNote(null);
+    setNotesTab("write");
+    setNoteForm(defaultNoteForm(null));
+    setLeftPanel("notes");
+    if (!draftNoteNodeId) {
+      const nodeId = `draft-note-${Date.now()}`;
+      setDraftNoteNodeId(nodeId);
+      setGraph((current) =>
+        sanitizeGraph({
+          ...current,
+          nodes: [
+            ...current.nodes,
+            {
+              id: nodeId,
+              title: "Writing note",
+              notes: "Draft note in progress.",
+              kind: "note",
+              linkedNoteId: null,
+              startDate: "",
+              bestBefore: "",
+              expectedTime: null,
+              realTime: 0,
+              expectedEffort: null,
+              realEffort: null,
+              workStartedAt: null,
+            },
+          ],
+        }),
+      );
+    }
+    focusPanel();
+  }
+
+  async function openExistingNote(noteId) {
+    try {
+      removeDraftNoteNode();
+      setContextMenu(null);
+      const note = await getNote(noteId);
+      setActiveNote(note);
+      setNoteForm(defaultNoteForm(note));
+      setNotesTab("write");
+      setLeftPanel("notes");
+      setSelectedId(note.linkedActivityId || null);
+      focusPanel();
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    }
+  }
+
+  function closeLeftPanel() {
+    removeDraftNoteNode();
+    setLeftPanel(null);
+    setActiveNote(null);
+    setImportFiles([]);
+    setChatInput("");
+    recenterView();
+  }
+
+  async function submitNote(event) {
+    event.preventDefault();
+    const payload = {
+      title: noteForm.title.trim(),
+      body: noteForm.body,
+    };
+    if (!payload.title) {
+      setError("Note title is required.");
+      return;
+    }
+    try {
+      if (activeNote?.id) {
+        const response = await updateNote(activeNote.id, payload);
+        setGraph(sanitizeGraph(response.graph));
+        await reloadGraph();
+        setActiveNote(response.note);
+        closeLeftPanel();
+        return;
+      }
+
+      const draftId = draftNoteNodeId;
+      if (draftId) {
+        startStructuralTransition(
+          "create-note",
+          (draft) => {
+            draft.nodes = draft.nodes.filter((node) => node.id !== draftId);
+            draft.nodes.push({
+              id: createNodeId(payload.title, draft.nodes),
+              title: payload.title,
+              notes: payload.body.trim().slice(0, 240),
+              kind: "note",
+              linkedNoteId: null,
+              startDate: "",
+              bestBefore: "",
+              expectedTime: null,
+              realTime: 0,
+              expectedEffort: null,
+              realEffort: null,
+              workStartedAt: null,
+            });
+          },
+          async () => {
+            const response = await createNote(payload);
+            setGraph(sanitizeGraph(response.graph));
+            setDraftNoteNodeId(null);
+            await reloadGraph();
+            setSelectedId(response.note.linkedActivityId || null);
+          },
+        );
+        setLeftPanel(null);
+        setActiveNote(null);
+        setImportFiles([]);
+        setChatInput("");
+        recenterView();
+      }
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    }
+  }
+
+  async function submitImport(event) {
+    event.preventDefault();
+    if (!importFiles.length) {
+      setError("Choose at least one .txt file to import.");
+      return;
+    }
+    try {
+      const formData = new FormData();
+      importFiles.forEach((file) => {
+        formData.append("files", file);
+      });
+      const response = await importTxtNotes(formData);
+      setGraph(sanitizeGraph(response.graph));
+      await reloadGraph();
+      closeLeftPanel();
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    }
+  }
+
+  async function submitChat(event) {
+    event.preventDefault();
+    const content = chatInput.trim();
+    if (!content) {
+      return;
+    }
+    try {
+      let sessionId = chatSession?.id;
+      if (!sessionId) {
+        const created = await createSession({ title: "Notes chat" });
+        sessionId = created.id;
+      }
+      await sendMessage(sessionId, { content });
+      await reloadChatSession(sessionId);
+      setChatInput("");
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    }
+  }
+
+  function submitActivityForm(event) {
+    event.preventDefault();
+    const payload = {
+      title: form.title.trim(),
+      notes: form.notes.trim(),
+      startDate: form.startDate || "",
+      bestBefore: form.bestBefore || "",
+      expectedTime: toNumberOrNull(form.expectedTime),
+      realTime: toNumberOrNull(form.realTime) || 0,
+      expectedEffort: toNumberOrNull(form.expectedEffort),
+      realEffort: toNumberOrNull(form.realEffort),
+    };
+    if (!payload.title) {
+      setError("Activity title is required.");
+      return;
+    }
+
+    if (sheet?.type === "create") {
+      startStructuralTransition("create", (draft) => {
+        const id = createNodeId(payload.title, draft.nodes);
+        draft.nodes.push({
+          id,
+          ...payload,
+          workStartedAt: null,
+        });
+      }, () => createActivity(payload));
+      closeSheet();
+      return;
+    }
+
+    if (sheet?.type === "insert-between" && sheet.parentId && sheet.childId) {
+      startStructuralTransition("insert-between", (draft) => {
+        const id = createNodeId(payload.title, draft.nodes);
+        draft.nodes.push({
+          id,
+          ...payload,
+          workStartedAt: null,
+        });
+        draft.dependencies = draft.dependencies.filter(
+          (edge) =>
+            !(
+              edge.parentId === sheet.parentId &&
+              edge.childId === sheet.childId
+            ),
+        );
+        draft.dependencies.push(
+          { parentId: sheet.parentId, childId: id },
+          { parentId: id, childId: sheet.childId },
+        );
+      }, () =>
+        insertBetween(sheet.childId, {
+          ...payload,
+          parentId: sheet.parentId,
+          childId: sheet.childId,
+        }));
+      closeSheet();
+      return;
+    }
+
+    if (sheet?.type === "edit" && sheet.nodeId) {
+      runLightweightMutation(
+        (draft) => {
+          const target = draft.nodes.find((node) => node.id === sheet.nodeId);
+          if (!target) {
+            return;
+          }
+          Object.assign(target, payload);
+        },
+        () =>
+          updateActivity(
+            sheet.nodeId,
+            payload,
+            (current) => replaceNode(current, sheet.nodeId, (node) => ({ ...node, ...payload })),
+          ),
+      );
+      closeSheet();
+    }
+  }
+
+  function startWork(nodeId) {
+    if (isTransitioning) {
+      return;
+    }
+    runLightweightMutation(
+      (draft) => {
+        draft.nodes.forEach((node) => {
+          if (node.id !== nodeId && node.workStartedAt) {
+            const elapsedMs = Math.max(0, Date.now() - new Date(node.workStartedAt).getTime());
+            node.realTime = Number(node.realTime || 0) + elapsedMs / 1000 / 60 / 60;
+            node.workStartedAt = null;
+          }
+        });
+        const target = draft.nodes.find((node) => node.id === nodeId);
+        if (target && !target.workStartedAt) {
+          target.workStartedAt = new Date().toISOString();
+        }
+      },
+      () =>
+        startWorkMutation(nodeId, (current) => {
+          const startedAt = new Date().toISOString();
+          return {
+            ...current,
+            nodes: current.nodes.map((node) => {
+              if (node.id === nodeId) {
+                return node.workStartedAt ? node : { ...node, workStartedAt: startedAt };
+              }
+              if (!node.workStartedAt) {
+                return node;
+              }
+              const elapsedMs = Math.max(0, Date.now() - new Date(node.workStartedAt).getTime());
+              return {
+                ...node,
+                realTime: Number(node.realTime || 0) + elapsedMs / 1000 / 60 / 60,
+                workStartedAt: null,
+              };
+            }),
+          };
+        }),
+    );
+    setContextMenu(null);
+    setSelectedId(nodeId);
+  }
+
+  function stopWork(nodeId) {
+    if (isTransitioning) {
+      return;
+    }
+    runLightweightMutation(
+      (draft) => {
+        const target = draft.nodes.find((node) => node.id === nodeId);
+        if (!target?.workStartedAt) {
+          return;
+        }
+        const elapsedMs = Math.max(0, Date.now() - new Date(target.workStartedAt).getTime());
+        target.realTime = Number(target.realTime || 0) + elapsedMs / 1000 / 60 / 60;
+        target.workStartedAt = null;
+      },
+      () =>
+        stopWorkMutation(nodeId, (current) =>
+          replaceNode(current, nodeId, (node) => {
+            if (!node.workStartedAt) {
+              return node;
+            }
+            const elapsedMs = Math.max(0, Date.now() - new Date(node.workStartedAt).getTime());
+            return {
+              ...node,
+              realTime: Number(node.realTime || 0) + elapsedMs / 1000 / 60 / 60,
+              workStartedAt: null,
+            };
+          }),
+        ),
+    );
+    setContextMenu(null);
+  }
+
+  function forkNode(nodeId) {
+    startStructuralTransition("fork", (draft) => {
+      const target = draft.nodes.find((node) => node.id === nodeId);
+      if (!target) {
+        return;
+      }
+      const id = createNodeId(`${target.title} fork`, draft.nodes);
+      draft.nodes.push({
+        ...target,
+        id,
+        title: `${target.title} fork`,
+        workStartedAt: null,
+      });
+      const parentEdges = draft.dependencies
+        .filter((edge) => edge.childId === nodeId)
+        .map((edge) => ({ parentId: edge.parentId, childId: id }));
+      const childEdges = draft.dependencies
+        .filter((edge) => edge.parentId === nodeId)
+        .map((edge) => ({ parentId: id, childId: edge.childId }));
+      draft.dependencies.push(...parentEdges, ...childEdges);
+    }, () => forkActivity(nodeId));
+    setContextMenu(null);
+  }
+
+  function deleteEdge(context) {
+    startStructuralTransition("delete-edge", (draft) => {
+      if (context.kind === "dependency-edge") {
+        draft.dependencies = draft.dependencies.filter(
+          (edge) =>
+            !(
+              edge.parentId === context.parentId &&
+              edge.childId === context.childId
+            ),
+        );
+        return;
+      }
+    }, () => deleteDependency(context.parentId, context.childId));
+    setContextMenu(null);
+  }
+
+  function deleteNode(nodeId, deleteTree = false) {
+    startStructuralTransition("delete", (draft) => {
+      const { parentMap, childMap } = buildIndexes(draft.nodes, draft.dependencies);
+      const removeIds = new Set([nodeId]);
+      if (deleteTree) {
+        collectDescendants(nodeId, childMap).forEach((id) => removeIds.add(id));
+      }
+
+      if (!deleteTree) {
+        const parents = parentMap.get(nodeId) || [];
+        const children = childMap.get(nodeId) || [];
+        children.forEach((childId) => {
+          parents.forEach((parentId) => {
+            const exists = draft.dependencies.some(
+              (edge) => edge.parentId === parentId && edge.childId === childId,
+            );
+            if (!exists) {
+              draft.dependencies.push({ parentId, childId });
+            }
+          });
+        });
+      }
+
+      draft.nodes = draft.nodes.filter((node) => !removeIds.has(node.id));
+      draft.dependencies = draft.dependencies.filter(
+        (edge) => !removeIds.has(edge.parentId) && !removeIds.has(edge.childId),
+      );
+      draft.schedules = draft.schedules.filter(
+        (rule) => !removeIds.has(rule.earlierId) && !removeIds.has(rule.laterId),
+      );
+    }, () => deleteActivity(nodeId, deleteTree));
+    setContextMenu(null);
+  }
+
+  function openDependencySheet(nodeId) {
+    const node = nodesById.get(nodeId);
+    if (!node) {
+      return;
+    }
+    const blocked = collectDescendants(nodeId, layout.childMap);
+    const selectedParents = new Set((layout.parentMap.get(nodeId) || []).map(String));
+    openSheet(
+      { type: "dependencies", nodeId },
+      {
+        ...defaultForm(node),
+        dependencyQuery: "",
+        parentIds: graph.nodes
+          .filter((entry) => entry.id !== nodeId && !blocked.has(entry.id))
+          .map((entry) => ({
+            id: entry.id,
+            title: entry.title,
+            checked: selectedParents.has(entry.id),
+          })),
+      },
+    );
+  }
+
+  function submitDependencySheet(event) {
+    event.preventDefault();
+    const nodeId = sheet?.nodeId;
+    if (!nodeId) {
+      return;
+    }
+    const parentIds = (form.parentIds || [])
+      .filter((entry) => entry.checked)
+      .map((entry) => entry.id);
+    try {
+      startStructuralTransition("edit-dependencies", (draft) => {
+        const nextDependencies = draft.dependencies.filter((edge) => edge.childId !== nodeId);
+        parentIds.forEach((parentId) => {
+          const nextEdge = { parentId, childId: nodeId };
+          if (wouldCreateCycle(draft.nodes, nextDependencies, nextEdge)) {
+            throw new Error("That dependency would create a cycle.");
+          }
+          nextDependencies.push(nextEdge);
+        });
+        draft.dependencies = nextDependencies;
+        const nextLayout = computeGraphLayout(draft);
+        draft.schedules = draft.schedules.filter((rule) => {
+          const leftBase = nextLayout.baseLevels.get(rule.earlierId);
+          const rightBase = nextLayout.baseLevels.get(rule.laterId);
+          return leftBase === rightBase;
+        });
+      }, () => replaceDependencies(nodeId, parentIds));
+      closeSheet();
+    } catch (nextError) {
+      setError(nextError.message);
+    }
+  }
+
+  function openAddDependencyActivity(nodeId) {
+    const ancestorRoots = graph.nodes
+      .filter((node) => (layout.parentMap.get(node.id) || []).length === 0)
+      .map((node) => node.id);
+    const selectedRoots = [...collectAncestors(nodeId, layout.parentMap)].filter(
+      (candidateId) => (layout.parentMap.get(candidateId) || []).length === 0,
+    );
+    const parentSet = new Set(selectedRoots.length ? selectedRoots : ancestorRoots);
+    openSheet(
+      { type: "add-dependency-activity", nodeId },
+      {
+        ...defaultForm(null),
+        dependencyQuery: "",
+        parentIds: graph.nodes
+          .map((node) => ({
+            id: node.id,
+            title: node.title,
+            checked: parentSet.has(node.id),
+          })),
+      },
+    );
+  }
+
+  function submitAddDependencyActivity(event) {
+    event.preventDefault();
+    const payload = {
+      title: form.title.trim(),
+      notes: form.notes.trim(),
+      startDate: form.startDate || "",
+      bestBefore: form.bestBefore || "",
+      expectedTime: toNumberOrNull(form.expectedTime),
+      realTime: toNumberOrNull(form.realTime) || 0,
+      expectedEffort: toNumberOrNull(form.expectedEffort),
+      realEffort: toNumberOrNull(form.realEffort),
+    };
+    if (!payload.title) {
+      setError("Activity title is required.");
+      return;
+    }
+    try {
+      startStructuralTransition("create", (draft) => {
+        const id = createNodeId(payload.title, draft.nodes);
+        draft.nodes.push({
+          id,
+          ...payload,
+          workStartedAt: null,
+        });
+        (form.parentIds || [])
+          .filter((entry) => entry.checked)
+          .forEach((entry) => {
+            const nextEdge = { parentId: entry.id, childId: id };
+            if (wouldCreateCycle(draft.nodes, draft.dependencies, nextEdge)) {
+              throw new Error("That dependency would create a cycle.");
+            }
+            draft.dependencies.push(nextEdge);
+          });
+      }, () =>
+        createActivity({
+          ...payload,
+          parentIds: (form.parentIds || [])
+            .filter((entry) => entry.checked)
+            .map((entry) => entry.id),
+        }));
+      closeSheet();
+    } catch (nextError) {
+      setError(nextError.message);
+    }
+  }
+
+  return (
+    <main className="app-shell" onClick={() => setContextMenu(null)}>
+      <header className="topbar">
+        <div className="brand">
+          <p className="eyebrow">MOVE37</p>
+        </div>
+      </header>
+
+      <aside className="control-dock" aria-label="View controls">
+        <button
+          type="button"
+          className="dock-button"
+          onClick={() => switchViewMode(displayViewMode === "3d" ? "2d" : "3d")}
+          aria-label={displayViewMode === "3d" ? "Show 2D graph" : "Show 3D graph"}
+          title={displayViewMode === "3d" ? "2D view" : "3D view"}
+        >
+          {displayViewMode === "3d" ? <RingsIcon /> : <GlobeIcon />}
+        </button>
+        <button
+          type="button"
+          className={`dock-button ${leftPanel === "notes" ? "active" : ""}`}
+          onClick={() => {
+            if (leftPanel === "notes") {
+              closeLeftPanel();
+              return;
+            }
+            if (leftPanel === "chat") {
+              closeLeftPanel();
+            }
+            openDraftNoteWorkspace();
+          }}
+          aria-label="Open notes workspace"
+          title="Notes"
+        >
+          <NotesIcon />
+        </button>
+        <button
+          type="button"
+          className={`dock-button ${leftPanel === "chat" ? "active" : ""}`}
+          onClick={() => {
+            if (leftPanel === "chat") {
+              closeLeftPanel();
+              return;
+            }
+            closeLeftPanel();
+            setLeftPanel("chat");
+            focusPanel();
+          }}
+          aria-label="Open notes chat"
+          title="Chat with notes"
+        >
+          <ChatIcon />
+        </button>
+        {Math.abs(zoom - 1) > 0.001 ? (
+          <button
+            type="button"
+            className="dock-button dock-button-text"
+            onClick={() => {
+              animateViewport({ zoom: 1 });
+            }}
+            aria-label="Reset zoom to 100%"
+            title="100%"
+          >
+            100%
+          </button>
+        ) : null}
+        {Math.abs(panOffset.x) > 0.5 || Math.abs(panOffset.y) > 0.5 ? (
+          <button
+            type="button"
+            className="dock-button"
+            onClick={recenterView}
+            aria-label="Recenter sphere"
+            title="Recenter sphere"
+          >
+            <CenterIcon />
+          </button>
+        ) : null}
+      </aside>
+
+      <p className={`status status-ticker ${messageVisible ? "visible" : "hidden"}`}>
+        {TOPBAR_MESSAGES[messageIndex]}
+      </p>
+
+      {graphLoading && !canonicalGraph && <div className="banner">Loading graph from api...</div>}
+      {error && <div className="banner">{error}</div>}
+
+      {leftPanel === "notes" && (
+        <aside className="workspace-panel" onClick={(event) => event.stopPropagation()}>
+          <div className="workspace-header">
+            <div>
+              <div className="workspace-tabs">
+                <button
+                  type="button"
+                  className={`workspace-tab ${notesTab === "write" ? "active" : ""}`}
+                  onClick={() => setNotesTab("write")}
+                >
+                  Write
+                </button>
+                <button
+                  type="button"
+                  className={`workspace-tab ${notesTab === "import" ? "active" : ""}`}
+                  onClick={() => setNotesTab("import")}
+                >
+                  Import
+                </button>
+              </div>
+              <p className="small">{notes.length} notes available</p>
+            </div>
+            <button type="button" className="ghost-button" onClick={closeLeftPanel}>
+              CLOSE
+            </button>
+          </div>
+          {notesTab === "write" ? (
+            <form className="workspace-form" onSubmit={submitNote}>
+              <label>
+                Title
+                <input
+                  value={noteForm.title}
+                  onChange={(event) => setNoteForm((current) => ({ ...current, title: event.target.value }))}
+                  placeholder="What is this note about?"
+                />
+              </label>
+              <label className="workspace-grow">
+                Body
+                <textarea
+                  value={noteForm.body}
+                  onChange={(event) => setNoteForm((current) => ({ ...current, body: event.target.value }))}
+                  placeholder="Capture the note in full."
+                />
+              </label>
+              {activeNote ? (
+                <p className="small">
+                  Indexed status: <strong>{activeNote.ingestStatus}</strong>
+                </p>
+              ) : (
+                <p className="small">Saving will enqueue embeddings and create a note node.</p>
+              )}
+              <div className="sheet-actions">
+                <button type="button" className="ghost-button" onClick={closeLeftPanel}>
+                  Cancel
+                </button>
+                <button type="submit" className="ghost-button">
+                  Save note
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form className="workspace-form" onSubmit={submitImport}>
+              <label>
+                Import `.txt` files
+                <input
+                  type="file"
+                  accept=".txt,text/plain"
+                  multiple
+                  onChange={(event) => setImportFiles(Array.from(event.target.files || []))}
+                />
+              </label>
+              <div className="import-list">
+                {importFiles.length ? (
+                  importFiles.map((file) => (
+                    <div key={`${file.name}-${file.size}`} className="import-item">
+                      <strong>{file.name}</strong>
+                      <span>{Math.max(1, Math.round(file.size / 1024))} KB</span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="small">Choose one or more UTF-8 or UTF-16 `.txt` files.</p>
+                )}
+              </div>
+              <div className="sheet-actions">
+                <button type="button" className="ghost-button" onClick={closeLeftPanel}>
+                  Cancel
+                </button>
+                <button type="submit" className="ghost-button">
+                  Import notes
+                </button>
+              </div>
+            </form>
+          )}
+        </aside>
+      )}
+
+      {leftPanel === "chat" && (
+        <aside className="workspace-panel chat-panel" onClick={(event) => event.stopPropagation()}>
+          <div className="workspace-header">
+            <div>
+              <h2>Notes Chat</h2>
+              <p className="small">Grounded on semantically retrieved notes.</p>
+            </div>
+            <button type="button" className="ghost-button" onClick={closeLeftPanel}>
+              CLOSE
+            </button>
+          </div>
+          <div className="chat-thread">
+            {chatSession?.messages?.length ? (
+              chatSession.messages.map((message) => (
+                <article key={message.id} className={`chat-message role-${message.role}`}>
+                  <p>{message.content}</p>
+                  {message.citations?.length ? (
+                    <div className="chat-citations">
+                      {message.citations.map((citation) => (
+                        <button
+                          key={`${message.id}-${citation.chunkId}`}
+                          type="button"
+                          className="chip"
+                          onClick={() => void openExistingNote(citation.noteId)}
+                        >
+                          {citation.noteTitle}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </article>
+              ))
+            ) : (
+              <p className="small">Start a conversation. Answers will cite the supporting notes.</p>
+            )}
+          </div>
+          <form className="workspace-form chat-form" onSubmit={submitChat}>
+            <label className="workspace-grow">
+              Message
+              <textarea
+                value={chatInput}
+                onChange={(event) => setChatInput(event.target.value)}
+                placeholder="Ask about your imported or written notes."
+              />
+            </label>
+            <div className="sheet-actions">
+              <button type="submit" className="ghost-button" disabled={chatLoading}>
+                {chatLoading ? "Thinking..." : "Send"}
+              </button>
+            </div>
+          </form>
+        </aside>
+      )}
+
+      <section
+        ref={shellRef}
+        className={`sphere-area view-${displayViewMode} ${isDragging ? "dragging" : ""} ${searchState} ${leftPanel ? "panel-open" : ""}`}
+        aria-label="Activity dependency network"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={stopDragging}
+        onPointerLeave={stopDragging}
+        onWheel={onWheel}
+        onContextMenu={openBackgroundContextMenu}
+      >
+        <svg viewBox={`0 0 ${size.width} ${size.height}`} role="img">
+          <defs>
+            <radialGradient id="sphere-halo" cx="50%" cy="50%">
+              <stop offset="58%" stopColor="#86cbff" stopOpacity="0" />
+              <stop offset="74%" stopColor="#7cc9ff" stopOpacity="0.2" />
+              <stop offset="84%" stopColor="#5ca6f5" stopOpacity="0.12" />
+              <stop offset="100%" stopColor="#2a4f8f" stopOpacity="0" />
+            </radialGradient>
+            <radialGradient id="sphere-halo-success" cx="50%" cy="50%">
+              <stop offset="58%" stopColor="#3dff8f" stopOpacity="0" />
+              <stop offset="74%" stopColor="#00ff66" stopOpacity="0.34" />
+              <stop offset="84%" stopColor="#00d958" stopOpacity="0.2" />
+              <stop offset="100%" stopColor="#0a5a2d" stopOpacity="0" />
+            </radialGradient>
+            <radialGradient id="sphere-halo-failure" cx="50%" cy="50%">
+              <stop offset="58%" stopColor="#ff4d6d" stopOpacity="0" />
+              <stop offset="74%" stopColor="#ff1e3c" stopOpacity="0.34" />
+              <stop offset="84%" stopColor="#d80027" stopOpacity="0.2" />
+              <stop offset="100%" stopColor="#5f0b1a" stopOpacity="0" />
+            </radialGradient>
+            <radialGradient id="sphere-vignette" cx="50%" cy="50%">
+              <stop offset="0%" stopColor="#00000000" />
+              <stop offset="62%" stopColor="#02061100" />
+              <stop offset="82%" stopColor="#01040c96" />
+              <stop offset="100%" stopColor="#000209d6" />
+            </radialGradient>
+            <marker
+              id="schedule-arrow"
+              viewBox="0 0 14 12"
+              refX="12.2"
+              refY="6"
+              markerWidth="7.2"
+              markerHeight="7.2"
+              orient="auto"
+              markerUnits="strokeWidth"
+            >
+              <path
+                d="M 1 1.4 C 4.4 2.2 7.2 3.8 12.2 6 C 7.2 8.2 4.4 9.8 1 10.6 C 2.8 9 4.1 7.6 5.2 6 C 4.1 4.4 2.8 3 1 1.4 z"
+                fill="#7ff4d7"
+              />
+            </marker>
+            <marker
+              id="schedule-arrow-active"
+              viewBox="0 0 14 12"
+              refX="12.2"
+              refY="6"
+              markerWidth="7.2"
+              markerHeight="7.2"
+              orient="auto"
+              markerUnits="strokeWidth"
+            >
+              <path
+                d="M 1 1.4 C 4.4 2.2 7.2 3.8 12.2 6 C 7.2 8.2 4.4 9.8 1 10.6 C 2.8 9 4.1 7.6 5.2 6 C 4.1 4.4 2.8 3 1 1.4 z"
+                fill="#abfff0"
+              />
+            </marker>
+            <marker
+              id="schedule-arrow-dimmed"
+              viewBox="0 0 14 12"
+              refX="12.2"
+              refY="6"
+              markerWidth="7.2"
+              markerHeight="7.2"
+              orient="auto"
+              markerUnits="strokeWidth"
+            >
+              <path
+                d="M 1 1.4 C 4.4 2.2 7.2 3.8 12.2 6 C 7.2 8.2 4.4 9.8 1 10.6 C 2.8 9 4.1 7.6 5.2 6 C 4.1 4.4 2.8 3 1 1.4 z"
+                fill="#7ff4d724"
+              />
+            </marker>
+            {renderState.dependencyEdges.map((edge) => {
+              const from = displayProjected.byId[edge.parentId];
+              const to = displayProjected.byId[edge.childId];
+              if (!from || !to) {
+                return null;
+              }
+              const innerPalette = getLevelPalette(from.level ?? 0, renderMaxLevel, levelSeed);
+              const outerPalette = getLevelPalette(to.level ?? 0, renderMaxLevel, levelSeed);
+              return (
+                <linearGradient
+                  key={`gradient-${edge.id}`}
+                  id={`edge-gradient-${edge.id}`}
+                  gradientUnits="userSpaceOnUse"
+                  x1={to.x}
+                  y1={to.y}
+                  x2={from.x}
+                  y2={from.y}
+                >
+                  <stop offset="0%" stopColor={outerPalette.nodeFill} stopOpacity="0.88" />
+                  <stop offset="100%" stopColor={innerPalette.nodeFill} stopOpacity="0.68" />
+                </linearGradient>
+              );
+            })}
+          </defs>
+
+          <rect width={size.width} height={size.height} fill="url(#sphere-vignette)" data-background="true" />
+          <ellipse
+            cx={displayProjected.centerX}
+            cy={displayProjected.centerY}
+            rx={Math.min(size.width, size.height) * 0.44 * zoom}
+            ry={Math.min(size.width, size.height) * 0.44 * zoom}
+            className="sphere-glow"
+            fill="url(#sphere-halo)"
+          />
+          <ellipse
+            cx={displayProjected.centerX}
+            cy={displayProjected.centerY}
+            rx={Math.min(size.width, size.height) * 0.44 * zoom}
+            ry={Math.min(size.width, size.height) * 0.44 * zoom}
+            className="sphere-glow-success"
+            fill="url(#sphere-halo-success)"
+          />
+          <ellipse
+            cx={displayProjected.centerX}
+            cy={displayProjected.centerY}
+            rx={Math.min(size.width, size.height) * 0.44 * zoom}
+            ry={Math.min(size.width, size.height) * 0.44 * zoom}
+            className="sphere-glow-failure"
+            fill="url(#sphere-halo-failure)"
+          />
+          <g className="graph-viewport">
+            <g className="sphere-shells" aria-hidden="true">
+              {[...renderState.levelShells].reverse().map((shell) => {
+                const shellRadius = Math.min(size.width, size.height) * 0.39 * zoom * shell.ratio;
+                return (
+                  <ellipse
+                    key={shell.level}
+                    cx={displayProjected.centerX}
+                    cy={displayProjected.centerY}
+                    rx={shellRadius}
+                    ry={shellRadius}
+                    className={["sphere-shell", shell.transitionState ? `shell-${shell.transitionState}` : ""]
+                      .filter(Boolean)
+                      .join(" ")}
+                    fill={shell.fill}
+                    style={{
+                      filter: `drop-shadow(0 0 ${6 + shell.level * 1.8}px ${shell.glow})`,
+                    }}
+                  />
+                );
+              })}
+            </g>
+
+            <g className={`graph-layer ${nodesVisible ? "visible" : "hidden"}`}>
+            {renderState.dependencyEdges.map((edge) => {
+              const from = displayProjected.byId[edge.parentId];
+              const to = displayProjected.byId[edge.childId];
+              if (!from || !to) {
+                return null;
+              }
+              const ambientEdge = !selectedId && !isTransitioning && ambientFlow.dependencyEdgeIds.has(edge.id);
+              if (!selectedId && !isTransitioning && !ambientEdge) {
+                return null;
+              }
+              const edgeStyle = getLevelVisualStyle(
+                Math.max(from.level ?? 0, to.level ?? 0),
+                renderMaxLevel,
+                levelSeed,
+              );
+              const active =
+                selectedId &&
+                highlightedDependencyIds.has(edge.parentId) &&
+                highlightedDependencyIds.has(edge.childId);
+              const dimmed = selectedId && !active;
+              const fromRadius = getNodeRenderRadius(from);
+              const toRadius = getNodeRenderRadius(to);
+              const fromWidth = Math.max(1.5, fromRadius * (active ? 0.52 : 0.44));
+              const toWidth = Math.max(1.8, toRadius * (active ? 0.56 : 0.48));
+              const midWidth = Math.max(0.72, Math.min(fromWidth, toWidth) * (active ? 0.26 : 0.18));
+              return (
+                <g key={edge.id}>
+                  <line
+                    className="edge-hit-area"
+                    x1={from.x}
+                    y1={from.y}
+                    x2={to.x}
+                    y2={to.y}
+                    onContextMenu={!isTransitioning ? (event) =>
+                      openDependencyEdgeContextMenu(event, edge.parentId, edge.childId)
+                    : undefined}
+                  />
+                  <path
+                    className={[
+                      "edge-ribbon",
+                      edge.transitionState ? `edge-${edge.transitionState}` : "",
+                      ambientEdge ? "ambient-tree" : "",
+                      active ? "active" : "",
+                      dimmed ? "dimmed" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    style={edgeStyle}
+                    d={buildPinchedEdgePath(
+                      from,
+                      to,
+                      fromWidth,
+                      toWidth,
+                      midWidth,
+                    )}
+                    fill={`url(#edge-gradient-${edge.id})`}
+                    onContextMenu={!isTransitioning ? (event) =>
+                      openDependencyEdgeContextMenu(event, edge.parentId, edge.childId)
+                    : undefined}
+                  />
+                </g>
+              );
+            })}
+
+            {renderState.scheduleEdges.map((rule) => {
+              if (!selectedId && !isTransitioning) {
+                return null;
+              }
+              const from = displayProjected.byId[rule.laterId];
+              const to = displayProjected.byId[rule.earlierId];
+              if (!from || !to) {
+                return null;
+              }
+              const edgeStyle = getLevelVisualStyle(
+                Math.max(from.level ?? 0, to.level ?? 0),
+                renderMaxLevel,
+                levelSeed,
+              );
+              const active =
+                selectedId &&
+                highlightedDependencyIds.has(rule.earlierId) &&
+                highlightedDependencyIds.has(rule.laterId);
+              const dimmed = selectedId && !active;
+              return (
+                <g key={rule.id}>
+                  <path
+                    className="edge-hit-area"
+                    d={buildClockwiseArcPath(to, from, {
+                      centerX: displayProjected.centerX,
+                      centerY: displayProjected.centerY,
+                      radius: displayProjected.radius,
+                      viewMode: displayViewMode,
+                      rotationX: effectiveRotationX,
+                      rotationY: effectiveRotationY,
+                    })}
+                    fill="none"
+                    onContextMenu={!isTransitioning ? (event) =>
+                      openScheduleEdgeContextMenu(event, rule.earlierId, rule.laterId)
+                    : undefined}
+                  />
+                  <path
+                  className={[
+                    "edge-line",
+                    "schedule",
+                    rule.transitionState ? `edge-${rule.transitionState}` : "",
+                    active ? "active" : "",
+                    dimmed ? "dimmed" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  style={edgeStyle}
+                  d={buildClockwiseArcPath(to, from, {
+                    centerX: displayProjected.centerX,
+                    centerY: displayProjected.centerY,
+                    radius: displayProjected.radius,
+                    viewMode: displayViewMode,
+                    rotationX: effectiveRotationX,
+                    rotationY: effectiveRotationY,
+                  })}
+                  fill="none"
+                  markerEnd={
+                    dimmed
+                      ? "url(#schedule-arrow-dimmed)"
+                      : active
+                        ? "url(#schedule-arrow-active)"
+                        : "url(#schedule-arrow)"
+                  }
+                  onContextMenu={!isTransitioning ? (event) =>
+                    openScheduleEdgeContextMenu(event, rule.earlierId, rule.laterId)
+                  : undefined}
+                />
+                </g>
+              );
+            })}
+
+            {displayNodes.map((node) => {
+              const selectedNode = node.id === selectedId;
+              const relatedNode = !selectedNode && highlightedDependencyIds.has(node.id);
+              const dimmedNode = selectedId && !selectedNode && !relatedNode;
+              const radius = getNodeRenderRadius(node);
+              const visualStyle = getLevelVisualStyle(node.level, renderMaxLevel, levelSeed);
+              const labelOpacity = Math.max(0.3, Math.min(0.95, node.depth - 0.08));
+              const haloClass = [
+                "node-halo",
+                node.transitionState ? `node-${node.transitionState}` : "",
+                selectedNode ? "active" : "",
+                relatedNode ? "related" : "",
+                node.scheduled ? "scheduled" : "",
+                node.kind === "note" ? "note" : "",
+                dimmedNode ? "dimmed" : "",
+              ]
+                .filter(Boolean)
+                .join(" ");
+              const coreClass = [
+                "node-core",
+                node.transitionState ? `node-${node.transitionState}` : "",
+                selectedNode ? "active" : "",
+                relatedNode ? "related" : "",
+                node.scheduled ? "scheduled" : "",
+                workingId === node.id ? "working" : "",
+                node.kind === "note" ? "note" : "",
+                dimmedNode ? "dimmed" : "",
+              ]
+                .filter(Boolean)
+                .join(" ");
+              const labelClass = [
+                "node-label",
+                node.transitionState ? `node-${node.transitionState}` : "",
+                node.kind === "note" ? "note" : "",
+                dimmedNode ? "dimmed" : "",
+              ]
+                .filter(Boolean)
+                .join(" ");
+              return (
+                <g
+                  key={node.id}
+                  className={node.transitionState === "moving" ? "node-moving-group" : ""}
+                  style={{
+                    transform: `translate(${node.x}px, ${node.y}px)`,
+                    ...visualStyle,
+                  }}
+                >
+                  <circle
+                    r={radius + 6}
+                    className={haloClass}
+                    onPointerDown={(event) => {
+                      event.stopPropagation();
+                      toggleSelectedNode(node.id);
+                    }}
+                    onContextMenu={(event) => openContextMenu(event, node.id)}
+                  />
+                  <circle
+                    r={radius + 1.5}
+                    className="node-soft-edge"
+                    onPointerDown={(event) => {
+                      event.stopPropagation();
+                      toggleSelectedNode(node.id);
+                    }}
+                    onContextMenu={(event) => openContextMenu(event, node.id)}
+                  />
+                  <circle
+                    r={radius}
+                    className={coreClass}
+                    onPointerDown={(event) => {
+                      event.stopPropagation();
+                      toggleSelectedNode(node.id);
+                    }}
+                    onContextMenu={(event) => openContextMenu(event, node.id)}
+                  />
+                  <text
+                    x={radius + 7}
+                    y={-radius - 2}
+                    className={labelClass}
+                    opacity={labelOpacity}
+                    onPointerDown={(event) => {
+                      event.stopPropagation();
+                      toggleSelectedNode(node.id);
+                    }}
+                    onContextMenu={(event) => openContextMenu(event, node.id)}
+                  >
+                    {node.title}
+                  </text>
+                </g>
+              );
+            })}
+            </g>
+          </g>
+        </svg>
+      </section>
+
+      {contextMenu && (
+        <div
+          className="context-menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {contextMenu.kind === "background" ? (
+            <button
+              type="button"
+              disabled={isTransitioning}
+              onClick={() => openSheet({ type: "create" }, defaultForm(null))}
+            >
+              Add activity
+            </button>
+          ) : contextMenu.kind === "dependency-edge" ? (
+            <>
+              <button
+                type="button"
+                disabled={isTransitioning}
+                onClick={() =>
+                  openSheet(
+                    {
+                      type: "insert-between",
+                      parentId: contextMenu.parentId,
+                      childId: contextMenu.childId,
+                    },
+                    defaultForm(null),
+                  )
+                }
+              >
+                Add activity
+              </button>
+              <button type="button" disabled={isTransitioning} onClick={() => deleteEdge(contextMenu)}>
+                Delete
+              </button>
+            </>
+          ) : contextMenu.kind === "schedule-edge" ? (
+            <>
+              <button
+                type="button"
+                disabled={isTransitioning}
+                onClick={() =>
+                  openSheet(
+                    { type: "edit", nodeId: contextMenu.laterId },
+                    defaultForm(nodesById.get(contextMenu.laterId)),
+                  )
+                }
+              >
+                Edit date
+              </button>
+              <p className="small">Derived from nodes sharing the same start date.</p>
+            </>
+          ) : (
+            <>
+              {nodesById.get(contextMenu.nodeId)?.kind === "note" ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const noteId = nodesById.get(contextMenu.nodeId)?.linkedNoteId;
+                    if (noteId) {
+                      void openExistingNote(noteId);
+                    }
+                  }}
+                >
+                  Open note
+                </button>
+              ) : (
+                <>
+                  <button type="button" onClick={() => setSelectedId(contextMenu.nodeId)}>
+                    View
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isTransitioning}
+                    onClick={() =>
+                      openSheet(
+                        { type: "edit", nodeId: contextMenu.nodeId },
+                        defaultForm(nodesById.get(contextMenu.nodeId)),
+                      )
+                    }
+                  >
+                    Edit
+                  </button>
+                  <button type="button" disabled={isTransitioning} onClick={() => openDependencySheet(contextMenu.nodeId)}>
+                    Edit dependencies
+                  </button>
+                  <button type="button" disabled={isTransitioning} onClick={() => openAddDependencyActivity(contextMenu.nodeId)}>
+                    Add dependency
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isTransitioning}
+                    onClick={() =>
+                      openSheet(
+                        { type: "edit", nodeId: contextMenu.nodeId },
+                        defaultForm(nodesById.get(contextMenu.nodeId)),
+                      )
+                    }
+                  >
+                    Set date
+                  </button>
+                  <div className="context-divider" />
+                  {workingId === contextMenu.nodeId ? (
+                    <button type="button" disabled={isTransitioning} onClick={() => stopWork(contextMenu.nodeId)}>
+                      Stop
+                    </button>
+                  ) : (
+                    <button type="button" disabled={isTransitioning} onClick={() => startWork(contextMenu.nodeId)}>
+                      Start
+                    </button>
+                  )}
+                  <button type="button" disabled={isTransitioning} onClick={() => forkNode(contextMenu.nodeId)}>
+                    Fork
+                  </button>
+                  <button type="button" disabled={isTransitioning} onClick={() => deleteNode(contextMenu.nodeId, false)}>
+                    Delete
+                  </button>
+                  <button type="button" disabled={isTransitioning} onClick={() => deleteNode(contextMenu.nodeId, true)}>
+                    Delete tree
+                  </button>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {selected && selectedDetails && selected.kind !== "note" && (
+        <aside className="details-modal details-sidepanel">
+          <div className="details-header">
+            <div>
+              <h2>{selected.title}</h2>
+              <p>{selected.notes || "No notes yet."}</p>
+            </div>
+            <button type="button" className="ghost-button" onClick={() => setSelectedId(null)}>
+              CLOSE
+            </button>
+          </div>
+          <div className="metric-grid">
+            <div className="metric-card">
+              <span>Level</span>
+              <strong>level {selectedDetails.level}</strong>
+            </div>
+            <div className="metric-card">
+              <span>Scheduled</span>
+              <strong>{selectedDetails.scheduled ? "yes" : "no"}</strong>
+            </div>
+            <div className="metric-card">
+              <span>Parents</span>
+              <strong>{selectedDetails.parentCount}</strong>
+            </div>
+            <div className="metric-card">
+              <span>Chain time</span>
+              <strong>{formatHours(selectedDetails.chainExpectedTime)}</strong>
+            </div>
+            <div className="metric-card">
+              <span>Expected time</span>
+              <strong>{formatHours(selected.expectedTime)}</strong>
+            </div>
+            <div className="metric-card">
+              <span>Real time</span>
+              <strong>{formatHours(selectedDetails.liveRealTime)}</strong>
+            </div>
+          </div>
+          <p>
+            <strong>Start date:</strong> {selected.startDate || "n/a"}
+          </p>
+          <p>
+            <strong>Best before:</strong> {selected.bestBefore || "n/a"}
+          </p>
+          <p>
+            <strong>Expected effort:</strong> {selected.expectedEffort ?? "n/a"}
+          </p>
+          <p>
+            <strong>Real effort:</strong> {selected.realEffort ?? "n/a"}
+          </p>
+          <p>
+            <strong>Base level:</strong> {selectedDetails.baseLevel}
+          </p>
+          <div className="chips">
+            {selectedDetails.parents.map((id) => (
+              <span key={id} className="chip">
+                parent: {nodesById.get(id)?.title || id}
+              </span>
+            ))}
+            {selectedDetails.children.map((id) => (
+              <span key={id} className="chip">
+                child: {nodesById.get(id)?.title || id}
+              </span>
+            ))}
+            {selectedDetails.parents.length === 0 && (
+              <span className="chip">core activity</span>
+            )}
+          </div>
+          <p className="small">
+            Highlighted chain: {highlightedDependencyIds.size} nodes | direct dependency edges:{" "}
+            {selectedDependencyEdges.length} | scheduling rules: {selectedScheduleEdges.length}
+          </p>
+        </aside>
+      )}
+
+      {sheet && (
+        <div className="sheet-backdrop" onPointerDown={closeSheet}>
+          <aside className="sheet" onPointerDown={(event) => event.stopPropagation()}>
+            {(sheet.type === "create" || sheet.type === "edit" || sheet.type === "insert-between") && (
+              <>
+                <h2>
+                  {sheet.type === "create"
+                    ? "Create activity"
+                    : sheet.type === "insert-between"
+                      ? "Insert activity between edge"
+                      : "Edit activity"}
+                </h2>
+                <form className="sheet-form" onSubmit={submitActivityForm}>
+                  <label>
+                    Title
+                    <input
+                      value={form.title}
+                      onChange={(event) => setForm((value) => ({ ...value, title: event.target.value }))}
+                    />
+                  </label>
+                  <label>
+                    Notes
+                    <textarea
+                      value={form.notes}
+                      onChange={(event) => setForm((value) => ({ ...value, notes: event.target.value }))}
+                    />
+                  </label>
+                  <div className="field-row">
+                    <label>
+                      Start date
+                      <input
+                        type="date"
+                        value={form.startDate}
+                        onChange={(event) =>
+                          setForm((value) => ({ ...value, startDate: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Best before
+                      <input
+                        type="date"
+                        value={form.bestBefore}
+                        onChange={(event) =>
+                          setForm((value) => ({ ...value, bestBefore: event.target.value }))
+                        }
+                      />
+                    </label>
+                  </div>
+                  <div className="field-row">
+                    <label>
+                      Expected time (hours)
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.25"
+                        value={form.expectedTime}
+                        onChange={(event) =>
+                          setForm((value) => ({ ...value, expectedTime: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Real time (hours)
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.25"
+                        value={form.realTime}
+                        onChange={(event) =>
+                          setForm((value) => ({ ...value, realTime: event.target.value }))
+                        }
+                      />
+                    </label>
+                  </div>
+                  <div className="field-row">
+                    <label>
+                      Expected effort
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.25"
+                        value={form.expectedEffort}
+                        onChange={(event) =>
+                          setForm((value) => ({ ...value, expectedEffort: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Real effort
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.25"
+                        value={form.realEffort}
+                        onChange={(event) =>
+                          setForm((value) => ({ ...value, realEffort: event.target.value }))
+                        }
+                      />
+                    </label>
+                  </div>
+                  <div className="sheet-actions">
+                    <button type="button" className="ghost-button" onClick={closeSheet}>
+                      Cancel
+                    </button>
+                    <button type="submit" className="ghost-button">
+                      Save
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+
+            {sheet.type === "dependencies" && (
+              <>
+                <h2>Edit dependencies</h2>
+                <form className="sheet-form" onSubmit={submitDependencySheet}>
+                  <label>
+                    <input
+                      value={form.dependencyQuery || ""}
+                      onChange={(event) =>
+                        setForm((value) => ({ ...value, dependencyQuery: event.target.value }))
+                      }
+                      placeholder="search by title or id"
+                    />
+                  </label>
+                  {(() => {
+                    const query = (form.dependencyQuery || "").trim().toLowerCase();
+                    const selectedParents = (form.parentIds || []).filter((entry) => entry.checked);
+                    const matchingParents = (form.parentIds || [])
+                      .filter((entry) => !entry.checked)
+                      .filter((entry) =>
+                        query
+                          ? entry.title.toLowerCase().includes(query) ||
+                            entry.id.toLowerCase().includes(query)
+                          : false,
+                      )
+                      .slice(0, 8);
+
+                    return (
+                      <>
+                        {query ? (
+                          <div className="dependency-results">
+                            {matchingParents.length > 0 ? (
+                              matchingParents.map((entry) => (
+                                <button
+                                  key={entry.id}
+                                  type="button"
+                                  className="dependency-result"
+                                  onClick={() =>
+                                    setForm((value) => ({
+                                      ...value,
+                                      dependencyQuery: "",
+                                      parentIds: value.parentIds.map((item) =>
+                                        item.id === entry.id ? { ...item, checked: true } : item,
+                                      ),
+                                    }))
+                                  }
+                                >
+                                  <span>{entry.title}</span>
+                                  <strong>{entry.id}</strong>
+                                </button>
+                              ))
+                            ) : (
+                              <p className="small">No matching activities.</p>
+                            )}
+                          </div>
+                        ) : null}
+
+                        <div className="dependency-selected">
+                          <p className="small">Selected: {selectedParents.length}</p>
+                          {selectedParents.length > 0 ? (
+                            <div className="dependency-chip-list">
+                              {selectedParents.map((entry) => (
+                                <button
+                                  key={entry.id}
+                                  type="button"
+                                  className="dependency-chip"
+                                  onClick={() =>
+                                    setForm((value) => ({
+                                      ...value,
+                                      parentIds: value.parentIds.map((item) =>
+                                        item.id === entry.id ? { ...item, checked: false } : item,
+                                      ),
+                                    }))
+                                  }
+                                >
+                                  <span>{entry.title}</span>
+                                  <strong className="dependency-chip-remove" aria-hidden="true">
+                                    ×
+                                  </strong>
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="small">No parent selected yet.</p>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
+                  <div className="sheet-actions">
+                    <button type="button" className="ghost-button" onClick={closeSheet}>
+                      Cancel
+                    </button>
+                    <button type="submit" className="ghost-button">
+                      Apply
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+
+            {sheet.type === "add-dependency-activity" && (
+              <>
+                <h2>Add dependency activity</h2>
+                <p>
+                  This creates a new activity and attaches it to the selected root-side branch.
+                </p>
+                <form className="sheet-form" onSubmit={submitAddDependencyActivity}>
+                  <label>
+                    Title
+                    <input
+                      value={form.title}
+                      onChange={(event) => setForm((value) => ({ ...value, title: event.target.value }))}
+                    />
+                  </label>
+                  <label>
+                    Notes
+                    <textarea
+                      value={form.notes}
+                      onChange={(event) => setForm((value) => ({ ...value, notes: event.target.value }))}
+                    />
+                  </label>
+                  <div className="field-row">
+                    <label>
+                      Start date
+                      <input
+                        type="date"
+                        value={form.startDate}
+                        onChange={(event) =>
+                          setForm((value) => ({ ...value, startDate: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Best before
+                      <input
+                        type="date"
+                        value={form.bestBefore}
+                        onChange={(event) =>
+                          setForm((value) => ({ ...value, bestBefore: event.target.value }))
+                        }
+                      />
+                    </label>
+                  </div>
+                  <label>
+                    Expected time (hours)
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.25"
+                      value={form.expectedTime}
+                      onChange={(event) =>
+                        setForm((value) => ({ ...value, expectedTime: event.target.value }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Search activities
+                    <input
+                      value={form.dependencyQuery || ""}
+                      onChange={(event) =>
+                        setForm((value) => ({ ...value, dependencyQuery: event.target.value }))
+                      }
+                      placeholder="search by title or id"
+                    />
+                  </label>
+                  {(() => {
+                    const query = (form.dependencyQuery || "").trim().toLowerCase();
+                    const selectedParents = (form.parentIds || []).filter((entry) => entry.checked);
+                    const matchingParents = (form.parentIds || [])
+                      .filter((entry) => !entry.checked)
+                      .filter((entry) =>
+                        query
+                          ? entry.title.toLowerCase().includes(query) ||
+                            entry.id.toLowerCase().includes(query)
+                          : false,
+                      )
+                      .slice(0, 8);
+
+                    return (
+                      <>
+                        {query ? (
+                          <div className="dependency-results">
+                            {matchingParents.length > 0 ? (
+                              matchingParents.map((entry) => (
+                                <button
+                                  key={entry.id}
+                                  type="button"
+                                  className="dependency-result"
+                                  onClick={() =>
+                                    setForm((value) => ({
+                                      ...value,
+                                      dependencyQuery: "",
+                                      parentIds: value.parentIds.map((item) =>
+                                        item.id === entry.id ? { ...item, checked: true } : item,
+                                      ),
+                                    }))
+                                  }
+                                >
+                                  <span>{entry.title}</span>
+                                  <strong>{entry.id}</strong>
+                                </button>
+                              ))
+                            ) : (
+                              <p className="small">No matching activities.</p>
+                            )}
+                          </div>
+                        ) : null}
+
+                        <div className="dependency-selected">
+                          <p className="small">Selected: {selectedParents.length}</p>
+                          {selectedParents.length > 0 ? (
+                            <div className="dependency-chip-list">
+                              {selectedParents.map((entry) => (
+                                <button
+                                  key={entry.id}
+                                  type="button"
+                                  className="dependency-chip"
+                                  onClick={() =>
+                                    setForm((value) => ({
+                                      ...value,
+                                      parentIds: value.parentIds.map((item) =>
+                                        item.id === entry.id ? { ...item, checked: false } : item,
+                                      ),
+                                    }))
+                                  }
+                                >
+                                  <span>{entry.title}</span>
+                                  <strong className="dependency-chip-remove" aria-hidden="true">
+                                    ×
+                                  </strong>
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="small">No parent selected yet.</p>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
+                  <div className="sheet-actions">
+                    <button type="button" className="ghost-button" onClick={closeSheet}>
+                      Cancel
+                    </button>
+                    <button type="submit" className="ghost-button">
+                      Create
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+          </aside>
+        </div>
+      )}
+
+      <footer className="bottombar">
+        <div className="uri-search">
+          <input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                runSearch();
+              }
+            }}
+            placeholder={SEARCH_PLACEHOLDER}
+            aria-label="Search activity"
+          />
+          <button
+            type="button"
+            className="search-trigger"
+            onClick={runSearch}
+            aria-label="Search activity"
+            title="Search activity"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M10.5 3.5a7 7 0 1 0 4.24 12.58l4.84 4.84a1 1 0 1 0 1.42-1.42l-4.84-4.84A7 7 0 0 0 10.5 3.5Zm0 2a5 5 0 1 1 0 10a5 5 0 0 1 0-10Z"
+                fill="currentColor"
+              />
+            </svg>
+          </button>
+        </div>
+      </footer>
+    </main>
+  );
+}

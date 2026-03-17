@@ -1,5 +1,5 @@
 {
-  "name": "penroselamarck-web",
+  "name": "mv37-web",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,7 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@genentech/penroselamarck": "file:../sdk/ts",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
