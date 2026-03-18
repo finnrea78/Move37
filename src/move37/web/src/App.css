@@ -213,7 +213,7 @@
   backdrop-filter: blur(2px);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 240ms ease, background-color 240ms ease;
+  transition: opacity 160ms ease, background-color 160ms ease;
 }
 
 .surface-overlay.visible {
@@ -237,7 +237,7 @@
   box-shadow: 0 18px 54px #00081d78;
   backdrop-filter: blur(10px);
   transform: translateY(14px) scale(0.985);
-  transition: transform 240ms ease, opacity 240ms ease;
+  transition: transform 160ms ease, opacity 160ms ease;
 }
 
 .surface-shell.list-shell {
@@ -331,7 +331,7 @@
 
 .control-dock {
   position: absolute;
-  left: min(calc(100vw - 3.7rem), calc(50% + min(34vw, 18.5rem)));
+  right: 1.35rem;
   top: 50%;
   transform: translateY(-50%);
   z-index: 14;
@@ -1021,12 +1021,12 @@
 
 .notes-overlay {
   position: absolute;
-  inset: 0 auto 0 0;
+  inset: 0 0 0 auto;
   z-index: 12;
   width: 50vw;
   height: 100dvh;
   background: rgb(4 11 24 / 80%);
-  border-right: 1px solid #8cb4ff1f;
+  border-left: 1px solid #8cb4ff1f;
   backdrop-filter: blur(6px);
 }
 
@@ -1365,7 +1365,7 @@ button.chip {
 
 .uri-search-panel {
   position: absolute;
-  left: calc(100% + 0.42rem);
+  right: calc(100% + 0.42rem);
   top: 50%;
   transform: translateY(-50%);
   width: 0;
@@ -1383,7 +1383,7 @@ button.chip {
 }
 
 .uri-search.expanded .uri-search-panel {
-  width: min(22rem, calc(100vw - 6.8rem - min(calc(50% + min(28vw, 14rem)), calc(100vw - 3.8rem))));
+  width: min(22rem, calc(100vw - 7.2rem));
   opacity: 1;
   border-color: #9fe8ff5f;
   box-shadow: 0 0 24px #6cd7ff18;

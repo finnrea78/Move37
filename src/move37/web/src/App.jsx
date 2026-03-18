@@ -23,6 +23,7 @@ const TOPBAR_MESSAGES = [
 const SEARCH_PLACEHOLDER = "search:activity";
 const EMPTY_GRAPH = { nodes: [], dependencies: [], schedules: [] };
 const DEFAULT_VIEWPORT_STATE = getDefaultViewport({ width: 1200, height: 760 });
+const SURFACE_TRANSITION_MS = 160;
 
 function getLevelNoise(level, sessionSeed) {
   const base = Math.sin(sessionSeed * 97.13 + level * 53.71) * 43758.5453;
@@ -363,6 +364,28 @@ function buildClockwiseArcPath(from, to, options) {
     return `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
   }
 
+  if (options.viewMode === "3d") {
+    const startAngle = Math.atan2(from.y - options.centerY, from.x - options.centerX);
+    let delta = Math.atan2(to.y - options.centerY, to.x - options.centerX) - startAngle;
+    while (delta <= 0) {
+      delta += Math.PI * 2;
+    }
+    const steps = Math.max(12, Math.ceil(delta / (Math.PI / 18)));
+    const fromDistance = Math.hypot(from.x - options.centerX, from.y - options.centerY);
+    const toDistance = Math.hypot(to.x - options.centerX, to.y - options.centerY);
+    const arcRadius = Math.max(fromDistance, toDistance) + 14;
+    let path = "";
+
+    for (let index = 0; index <= steps; index += 1) {
+      const angle = startAngle + (delta * index) / steps;
+      const x = options.centerX + Math.cos(angle) * arcRadius;
+      const y = options.centerY + Math.sin(angle) * arcRadius;
+      path += `${index === 0 ? "M" : " L"} ${x} ${y}`;
+    }
+
+    return path;
+  }
+
   let delta = to.angle - from.angle;
   while (delta <= 0) {
     delta += Math.PI * 2;
@@ -576,11 +599,12 @@ function sanitizeGraph(graph) {
 }
 
 function getDefaultViewport(size) {
+  // default sphere location and zoom
   return {
-    zoom: 1.08,
+    zoom: 2.00,
     panOffset: {
-      x: Math.round(size.width * -0.14),
-      y: Math.round(size.height * -0.08),
+      x: Math.round(size.width * -0.24),
+      y: Math.round(size.height * -0.16),
     },
   };
 }
@@ -1141,19 +1165,20 @@ export default function App() {
         width: Math.max(320, Math.floor(entry.contentRect.width)),
         height: Math.max(340, Math.floor(entry.contentRect.height)),
       });
+      if (!viewportInitializedRef.current) {
+        viewportInitializedRef.current = true;
+        const measuredSize = {
+          width: Math.max(320, Math.floor(entry.contentRect.width)),
+          height: Math.max(340, Math.floor(entry.contentRect.height)),
+        };
+        const nextViewport = getDefaultViewport(measuredSize);
+        setZoom(nextViewport.zoom);
+        setPanOffset(nextViewport.panOffset);
+      }
     });
     observer.observe(node);
     return () => observer.disconnect();
   }, []);
-
-  useEffect(() => {
-    if (viewportInitializedRef.current) {
-      return;
-    }
-    viewportInitializedRef.current = true;
-    setZoom(defaultViewport.zoom);
-    setPanOffset(defaultViewport.panOffset);
-  }, [defaultViewport]);
 
   useEffect(
     () => () => {
@@ -1166,6 +1191,27 @@ export default function App() {
     },
     [],
   );
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      if (sheet) {
+        closeSheet();
+        return;
+      }
+      if (contextMenu) {
+        setContextMenu(null);
+        return;
+      }
+      if (displayedSurfaceMode) {
+        closeSurfaceOverlay();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [contextMenu, displayedSurfaceMode, sheet, surfaceClosingMode, surfaceMode]);
 
   useEffect(() => {
     const shouldRotate3D =
@@ -2018,7 +2064,7 @@ export default function App() {
       if (callback) {
         callback();
       }
-    }, 240);
+    }, SURFACE_TRANSITION_MS);
   }
 
   function performGraphModeSwitch(nextMode) {
@@ -3263,7 +3309,7 @@ export default function App() {
               })}
             </g>
 
-            <g className={`graph-layer ${nodesVisible ? "visible" : "hidden"}`}>
+            <g className={`graph-layer ${nodesVisible && !displayedSurfaceMode ? "visible" : "hidden"}`}>
             {renderState.dependencyEdges.map((edge) => {
               const from = displayProjected.byId[edge.parentId];
               const to = displayProjected.byId[edge.childId];
@@ -3497,6 +3543,7 @@ export default function App() {
         <div
           className={`surface-overlay ${surfaceOverlayVisible ? "visible" : "closing"}`}
           aria-hidden={!surfaceOverlayVisible}
+          onClick={() => closeSurfaceOverlay()}
         >
           <section
             className={`surface-shell ${displayedSurfaceMode === "calendar" ? "calendar-shell" : "list-shell"}`}
